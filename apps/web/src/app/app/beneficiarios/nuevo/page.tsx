@@ -75,6 +75,220 @@ const FlagIcon = ({ code, size = 40 }: { code: string; size?: number }) => {
   return flags[code] || <div className="w-10 h-7 bg-gray-200 rounded flex items-center justify-center text-xs">💱</div>;
 };
 
+// Banderas pequeñas para el dropdown de tipo de documento
+const CountryFlag = ({ country, size = 20 }: { country: string; size?: number }) => {
+  const flags: Record<string, React.ReactNode> = {
+    VE: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#FFCC00" width="60" height="13.33" />
+        <rect fill="#00247D" y="13.33" width="60" height="13.33" />
+        <rect fill="#CF142B" y="26.66" width="60" height="13.34" />
+      </svg>
+    ),
+    CO: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#FCD116" width="60" height="20" />
+        <rect fill="#003893" y="20" width="60" height="10" />
+        <rect fill="#CE1126" y="30" width="60" height="10" />
+      </svg>
+    ),
+    PE: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#D91023" width="20" height="40" />
+        <rect fill="#fff" x="20" width="20" height="40" />
+        <rect fill="#D91023" x="40" width="20" height="40" />
+      </svg>
+    ),
+    CL: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#fff" width="60" height="20" />
+        <rect fill="#D52B1E" y="20" width="60" height="20" />
+        <rect fill="#0039A6" width="20" height="20" />
+      </svg>
+    ),
+    PA: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#fff" width="30" height="20" />
+        <rect fill="#005EB8" x="30" width="30" height="20" />
+        <rect fill="#DA121A" y="20" width="30" height="20" />
+        <rect fill="#fff" x="30" y="20" width="30" height="20" />
+      </svg>
+    ),
+    US: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#B22234" width="60" height="40" />
+        <g fill="#fff">{[0, 1, 2, 3, 4, 5].map(i => <rect key={i} y={i * 6.15 + 3.08} width="60" height="3.08" />)}</g>
+        <rect fill="#3C3B6E" width="24" height="21.54" />
+      </svg>
+    ),
+    EU: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#003399" width="60" height="40" />
+        <g fill="#FFCC00">{[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => {
+          const angle = (i * 30 - 90) * Math.PI / 180;
+          const x = 30 + 10 * Math.cos(angle);
+          const y = 20 + 10 * Math.sin(angle);
+          return <circle key={i} cx={x} cy={y} r="2" />;
+        })}</g>
+      </svg>
+    ),
+    WORLD: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#4ECDC4" width="60" height="40" />
+        <circle cx="30" cy="20" r="14" fill="none" stroke="#fff" strokeWidth="2" />
+        <ellipse cx="30" cy="20" rx="7" ry="14" fill="none" stroke="#fff" strokeWidth="1.5" />
+        <line x1="16" y1="20" x2="44" y2="20" stroke="#fff" strokeWidth="1.5" />
+      </svg>
+    ),
+  };
+  return <span className="flex-shrink-0">{flags[country] || null}</span>;
+};
+
+// Opciones de tipo de documento por país
+const documentTypeOptions = [
+  {
+    country: 'VE', label: 'Venezuela', options: [
+      { value: 'CI-V', label: 'Cédula de Identidad (V)' },
+      { value: 'CI-E', label: 'Cédula de Identidad (E)' },
+      { value: 'RIF-V', label: 'RIF Personal (V)' },
+      { value: 'RIF-J', label: 'RIF Jurídico (J)' },
+    ]
+  },
+  {
+    country: 'CO', label: 'Colombia', options: [
+      { value: 'CC', label: 'Cédula de Ciudadanía (CC)' },
+      { value: 'NIT', label: 'NIT Empresarial' },
+      { value: 'CE-CO', label: 'Cédula de Extranjería' },
+      { value: 'TI', label: 'Tarjeta de Identidad (TI)' },
+    ]
+  },
+  {
+    country: 'PE', label: 'Perú', options: [
+      { value: 'DNI-PE', label: 'DNI Perú' },
+      { value: 'RUC', label: 'RUC Empresarial' },
+      { value: 'CE-PE', label: 'Carnet de Extranjería' },
+    ]
+  },
+  {
+    country: 'CL', label: 'Chile', options: [
+      { value: 'RUT', label: 'RUT/RUN Chile' },
+    ]
+  },
+  {
+    country: 'PA', label: 'Panamá', options: [
+      { value: 'CIP', label: 'Cédula de Identidad Personal' },
+      { value: 'RUC-PA', label: 'RUC Panamá' },
+    ]
+  },
+  {
+    country: 'US', label: 'Estados Unidos', options: [
+      { value: 'SSN', label: 'Social Security Number (SSN)' },
+      { value: 'EIN', label: 'Employer ID Number (EIN)' },
+      { value: 'ITIN', label: 'Individual Tax ID (ITIN)' },
+    ]
+  },
+  {
+    country: 'EU', label: 'Europa', options: [
+      { value: 'DNI-ES', label: 'DNI España' },
+      { value: 'NIE', label: 'NIE España' },
+      { value: 'NIF', label: 'NIF España' },
+    ]
+  },
+  {
+    country: 'WORLD', label: 'Universal', options: [
+      { value: 'PASAPORTE', label: 'Pasaporte' },
+      { value: 'ID', label: 'ID/Identificación General' },
+    ]
+  },
+];
+
+// Componente personalizado de selección de tipo de documento
+const DocumentTypeSelect = ({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Obtener la opción seleccionada
+  const getSelectedOption = () => {
+    for (const group of documentTypeOptions) {
+      const option = group.options.find(o => o.value === value);
+      if (option) return { ...option, country: group.country };
+    }
+    return null;
+  };
+
+  const selected = getSelectedOption();
+
+  return (
+    <div className="relative">
+      {/* Botón de selección */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="input w-full flex items-center gap-3 text-left cursor-pointer"
+      >
+        {selected ? (
+          <>
+            <CountryFlag country={selected.country} size={24} />
+            <span className="flex-1 truncate">{selected.label}</span>
+          </>
+        ) : (
+          <>
+            <Hash className="text-gray-400" size={18} />
+            <span className="flex-1 text-gray-400">Selecciona tipo de documento</span>
+          </>
+        )}
+        <ChevronDown className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} size={18} />
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <>
+          {/* Overlay para cerrar al hacer clic fuera */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
+
+          {/* Lista de opciones */}
+          <div className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl max-h-80 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
+            {documentTypeOptions.map(group => (
+              <div key={group.country}>
+                {/* Header del grupo */}
+                <div className="sticky top-0 px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                  <CountryFlag country={group.country} size={20} />
+                  <span className="font-semibold text-gray-700 text-sm">{group.label}</span>
+                </div>
+
+                {/* Opciones del grupo */}
+                {group.options.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-blue-50 transition-colors ${value === option.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                      }`}
+                  >
+                    <span className="flex-1">{option.label}</span>
+                    {value === option.value && <CheckCircle2 className="text-blue-600" size={18} />}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 interface BankPlatform {
   id: number;
   name: string;
@@ -105,7 +319,8 @@ export default function NewBeneficiaryPage() {
     bank_platform_id: '',
     account_number: '',
     account_holder: '',
-    document_number: '', // C.I. / RIF / ID
+    document_type: '', // Tipo de documento
+    document_number: '', // Número de documento
     account_type: 'SAVINGS',
     email: '',
     alias: '',
@@ -197,6 +412,7 @@ export default function NewBeneficiaryPage() {
         bank_platform_id: parseInt(formData.bank_platform_id),
         account_number: formData.account_number,
         account_holder: formData.account_holder,
+        document_type: formData.document_type || null,
         document_number: formData.document_number,
         // Auto-set account_type for wallets and Pago Móvil
         account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : formData.account_type,
@@ -466,9 +682,18 @@ export default function NewBeneficiaryPage() {
                   </div>
                 )}
 
-                {/* Documento */}
+                {/* Tipo de Documento - Componente personalizado con banderas */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Documento Titular (C.I./NIT/RIF/DNI/RUT/SSN/PASAPORTE/ETC.)</label>
+                  <label className="text-sm font-medium text-gray-700">Tipo de Documento</label>
+                  <DocumentTypeSelect
+                    value={formData.document_type}
+                    onChange={(value) => setFormData(prev => ({ ...prev, document_type: value }))}
+                  />
+                </div>
+
+                {/* Número de Documento */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Número de Documento</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -476,7 +701,7 @@ export default function NewBeneficiaryPage() {
                       value={formData.document_number}
                       onChange={handleChange}
                       className={`input pl-10 w-full ${errors.document_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                      placeholder="V-12345678"
+                      placeholder={formData.document_type ? `Ej: 12345678` : 'Selecciona tipo primero'}
                     />
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>
