@@ -468,7 +468,7 @@ export default function NewBeneficiaryPage() {
 
                 {/* Documento */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Documento Titular (C.I./NIT/RIF)</label>
+                  <label className="text-sm font-medium text-gray-700">Documento Titular (C.I./NIT/RIF/DNI/RUT/SSN/PASAPORTE/ETC.)</label>
                   <div className="relative">
                     <input
                       type="text"
