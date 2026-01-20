@@ -1,0 +1,30 @@
+{
+  "name": "fengxchange",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plataforma Fintech para cambio de divisas - Fengxchange 2.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter @fengxchange/web dev",
+    "dev:backend": "pnpm --filter @fengxchange/backend dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @fengxchange/web build",
+    "build:backend": "pnpm --filter @fengxchange/backend build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean && rm -rf node_modules"
+  },
+  "keywords": [
+    "fintech",
+    "exchange",
+    "divisas",
+    "monorepo"
+  ],
+  "author": "Fengxchange",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

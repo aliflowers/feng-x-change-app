@@ -1,0 +1,262 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   DESIGN SYSTEM - FENGXCHANGE 2.0
+   Basado en: MASTER_PLAN_FENGXCHANGE.md
+   ============================================ */
+
+/* Variables CSS */
+:root {
+  /* Colores principales */
+  --color-primary: #AB2820;
+  --color-hero-start: #05294F;
+  --color-hero-end: #07478F;
+  --color-burgundy: #8B2E34;
+  --color-text-dark: #201816;
+  --color-bg-form: #F1F1F1;
+  --color-whatsapp: #25D366;
+
+  /* Estados de transacción */
+  --color-status-pool: #3B82F6;
+  --color-status-taken: #F59E0B;
+  --color-status-completed: #10B981;
+  --color-status-rejected: #EF4444;
+
+  /* Spacing */
+  --radius-button: 10px;
+  --radius-card: 15px;
+  --radius-input: 10px;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+@layer base {
+  html {
+    font-family: var(--font-montserrat), system-ui, sans-serif;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-text-dark antialiased;
+  }
+
+  /* Tipografía base */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-montserrat font-bold;
+  }
+
+  h1 {
+    @apply text-title-xl;
+  }
+
+  h2 {
+    @apply text-title-lg;
+  }
+
+  h3 {
+    @apply text-title-md;
+  }
+
+  h4 {
+    @apply text-title-sm;
+  }
+
+  p {
+    @apply text-base font-normal leading-relaxed;
+  }
+
+  a {
+    @apply text-primary hover:underline transition-colors;
+  }
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
+
+@layer components {
+  /* Botón primario */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3;
+    @apply bg-button-gradient text-white font-semibold;
+    @apply rounded-button shadow-card;
+    @apply hover:shadow-card-hover hover:brightness-110;
+    @apply transition-all duration-200;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Botón secundario */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3;
+    @apply bg-white text-primary border-2 border-primary;
+    @apply font-semibold rounded-button;
+    @apply hover:bg-primary hover:text-white;
+    @apply transition-all duration-200;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Botón WhatsApp */
+  .btn-whatsapp {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3;
+    @apply bg-whatsapp text-white font-semibold;
+    @apply rounded-button shadow-card;
+    @apply hover:shadow-card-hover hover:brightness-110;
+    @apply transition-all duration-200;
+  }
+
+  /* Input de formulario */
+  .input {
+    @apply w-full px-4 py-3;
+    @apply bg-bg-form border border-gray-200;
+    @apply rounded-input text-text-dark;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary;
+    @apply transition-all duration-200;
+    @apply placeholder:text-gray-400;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500/50;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-white rounded-card shadow-card p-6;
+    @apply hover:shadow-card-hover transition-shadow duration-200;
+  }
+
+  /* Hero section con gradiente */
+  .hero-gradient {
+    @apply bg-hero-gradient text-white;
+  }
+
+  /* Badges de estado */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-pool {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .badge-taken {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-completed {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .badge-rejected {
+    @apply bg-red-100 text-red-800;
+  }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+@layer utilities {
+  /* Gradient de texto */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-hero-gradient;
+  }
+
+  /* Contenedor centrado responsive */
+  .container-app {
+    @apply container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl;
+  }
+
+  /* Timer visual */
+  .timer-warning {
+    @apply text-yellow-600 animate-pulse;
+  }
+
+  .timer-danger {
+    @apply text-red-600 animate-pulse-slow;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+}
+
+/* ============================================
+   RESPONSIVE BREAKPOINTS (Mobile First)
+   ============================================ */
+
+/* Ocultar en móvil, mostrar en desktop */
+.hide-mobile {
+  @apply hidden md:block;
+}
+
+/* Mostrar en móvil, ocultar en desktop */
+.show-mobile {
+  @apply block md:hidden;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
