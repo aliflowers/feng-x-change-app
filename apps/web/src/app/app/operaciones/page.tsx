@@ -78,8 +78,9 @@ export default function OperacionesPage() {
   // Multiple beneficiaries
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState<SelectedBeneficiary[]>([]);
 
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  // Multiple proof files
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
+  const [proofPreviews, setProofPreviews] = useState<string[]>([]);
 
   // Load data
   useEffect(() => {
@@ -157,44 +158,69 @@ export default function OperacionesPage() {
   // Get account by ID
   const getAccount = (id: string) => userAccounts.find(acc => acc.id === id);
 
-  // Toggle beneficiary selection
+  // Toggle beneficiary selection - with auto-distribution
   const toggleBeneficiary = (accountId: string) => {
+    const totalAmount = parseFloat(amountSent || '0');
     const existing = selectedBeneficiaries.find(b => b.accountId === accountId);
+
     if (existing) {
-      // Remove
-      setSelectedBeneficiaries(prev => prev.filter(b => b.accountId !== accountId));
+      // Remove and redistribute among remaining
+      const remaining = selectedBeneficiaries.filter(b => b.accountId !== accountId);
+      if (remaining.length > 0) {
+        const perBeneficiary = totalAmount / remaining.length;
+        setSelectedBeneficiaries(remaining.map(b => ({ ...b, amountToSend: perBeneficiary })));
+      } else {
+        setSelectedBeneficiaries([]);
+      }
     } else {
-      // Add with remaining amount (or 0 if negative)
-      setSelectedBeneficiaries(prev => [
-        ...prev,
-        { accountId, amountToSend: Math.max(0, remainingAmount) }
-      ]);
+      // Add and redistribute equally among all
+      const newList = [...selectedBeneficiaries, { accountId, amountToSend: 0 }];
+      const perBeneficiary = totalAmount / newList.length;
+      setSelectedBeneficiaries(newList.map(b => ({ ...b, amountToSend: perBeneficiary })));
     }
   };
 
-  // Update beneficiary amount
-  const updateBeneficiaryAmount = (accountId: string, amount: number) => {
+  // Update beneficiary amount (with validation to not exceed total)
+  const updateBeneficiaryAmount = (accountId: string, newAmount: number) => {
+    const totalAmount = parseFloat(amountSent || '0');
+    const otherBeneficiariesTotal = selectedBeneficiaries
+      .filter(b => b.accountId !== accountId)
+      .reduce((sum, b) => sum + b.amountToSend, 0);
+
+    // Limit amount to not exceed total - what others have
+    const maxAllowed = Math.max(0, totalAmount - otherBeneficiariesTotal);
+    const clampedAmount = Math.min(Math.max(0, newAmount), maxAllowed);
+
     setSelectedBeneficiaries(prev =>
-      prev.map(b => b.accountId === accountId ? { ...b, amountToSend: amount } : b)
+      prev.map(b => b.accountId === accountId ? { ...b, amountToSend: clampedAmount } : b)
     );
   };
 
-  // Handle proof file change
+  // Handle proof files change (multiple files)
   const handleProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProofFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setProofFiles(prev => [...prev, ...files]);
+      // Generate previews
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setProofPreviews(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
     }
+  };
+
+  // Remove a proof file
+  const removeProofFile = (index: number) => {
+    setProofFiles(prev => prev.filter((_, i) => i !== index));
+    setProofPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   // Submit transaction(s)
   const handleSubmit = async () => {
-    if (selectedBeneficiaries.length === 0 || !proofFile) {
+    if (selectedBeneficiaries.length === 0 || proofFiles.length === 0) {
       setError('Por favor selecciona al menos un beneficiario y sube el comprobante de pago');
       return;
     }
@@ -213,23 +239,25 @@ export default function OperacionesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
 
-      // Upload proof
-      let proofUrl: string | null = null;
-      const fileExt = proofFile.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      // Upload all proof files
+      const proofUrls: string[] = [];
+      for (const file of proofFiles) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('client-proofs')
-        .upload(fileName, proofFile);
-
-      if (uploadError) {
-        console.error('Error uploading proof:', uploadError);
-      } else {
-        const { data: { publicUrl } } = supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('client-proofs')
-          .getPublicUrl(fileName);
-        proofUrl = publicUrl;
+          .upload(fileName, file);
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('client-proofs')
+            .getPublicUrl(fileName);
+          proofUrls.push(publicUrl);
+        }
       }
+
+      const proofUrl = proofUrls.length > 0 ? proofUrls.join(',') : null;
 
       // Create transactions for each beneficiary
       const rate = getCurrentRate();
@@ -348,13 +376,6 @@ export default function OperacionesPage() {
         })}
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-xl border border-red-200">
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
-      )}
 
       {/* Step Content */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -374,7 +395,7 @@ export default function OperacionesPage() {
                 onChange={(e) => setFromCurrencyId(parseInt(e.target.value))}
                 className="input"
               >
-                {currencies.filter(c => c.code === 'USD' || c.code === 'EUR').map(currency => (
+                {currencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
                     {currency.symbol} {currency.code} - {currency.name}
                   </option>
@@ -424,7 +445,7 @@ export default function OperacionesPage() {
                 }}
                 className="input"
               >
-                {currencies.filter(c => c.code !== 'USD' && c.code !== 'EUR').map(currency => (
+                {currencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
                     {currency.symbol} {currency.code} - {currency.name}
                   </option>
@@ -453,28 +474,12 @@ export default function OperacionesPage() {
               </p>
             </div>
 
-            {/* Amount indicator */}
-            <div className={`p-4 rounded-xl border ${Math.abs(remainingAmount) < 0.01
-                ? 'bg-green-50 border-green-200'
-                : remainingAmount < 0
-                  ? 'bg-red-50 border-red-200'
-                  : 'bg-amber-50 border-amber-200'
-              }`}>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total a enviar:</span>
-                <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-sm font-medium">Distribuido:</span>
-                <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {totalAmountToBeneficiaries.toFixed(2)}</span>
-              </div>
-              <div className="h-px bg-gray-300 my-2" />
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Restante:</span>
-                <span className={`font-bold ${remainingAmount < 0 ? 'text-red-600' : remainingAmount > 0.01 ? 'text-amber-600' : 'text-green-600'}`}>
-                  {getCurrency(fromCurrencyId)?.symbol} {remainingAmount.toFixed(2)}
-                </span>
-              </div>
+            {/* Info message */}
+            <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-2">
+              <Info className="text-blue-600 flex-shrink-0" size={18} />
+              <p className="text-sm text-blue-700">
+                Selecciona los beneficiarios. El monto se distribuirá automáticamente entre ellos. Podrás ajustar la distribución en el siguiente paso.
+              </p>
             </div>
 
             {filteredAccounts.length === 0 ? (
@@ -500,13 +505,12 @@ export default function OperacionesPage() {
               <div className="space-y-3">
                 {filteredAccounts.map(account => {
                   const isSelected = selectedBeneficiaries.some(b => b.accountId === account.id);
-                  const beneficiary = selectedBeneficiaries.find(b => b.accountId === account.id);
                   return (
                     <div
                       key={account.id}
                       className={`p-4 rounded-xl border-2 transition-all ${isSelected
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
                       <div className="flex items-center gap-4">
@@ -536,36 +540,6 @@ export default function OperacionesPage() {
                         )}
                       </div>
 
-                      {/* Amount input for selected beneficiary */}
-                      {isSelected && beneficiary && (
-                        <div className="mt-4 pt-4 border-t border-blue-200">
-                          <label className="text-xs font-semibold text-gray-600 mb-1 block">
-                            Monto a enviar ({getCurrency(fromCurrencyId)?.code})
-                          </label>
-                          <div className="flex gap-3 items-center">
-                            <div className="relative flex-1">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold">
-                                {getCurrency(fromCurrencyId)?.symbol}
-                              </span>
-                              <input
-                                type="number"
-                                value={beneficiary.amountToSend || ''}
-                                onChange={(e) => updateBeneficiaryAmount(account.id, parseFloat(e.target.value) || 0)}
-                                className="input pl-8 py-2 text-lg font-bold"
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                              />
-                            </div>
-                            <div className="text-right min-w-[100px]">
-                              <p className="text-xs text-gray-500">Recibe</p>
-                              <p className="font-bold text-green-600">
-                                {getCurrency(toCurrencyId)?.symbol} {(beneficiary.amountToSend * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -603,67 +577,174 @@ export default function OperacionesPage() {
             </div>
 
             {/* Beneficiaries breakdown */}
+            {/* Beneficiaries breakdown with editable amounts */}
             <div className="space-y-3">
               <p className="text-sm font-semibold text-gray-700">Distribución por beneficiario:</p>
+
+              {/* Amount indicator */}
+              <div className={`p-3 rounded-xl border ${Math.abs(remainingAmount) < 0.01
+                ? 'bg-green-50 border-green-200'
+                : remainingAmount < 0
+                  ? 'bg-red-50 border-red-200'
+                  : 'bg-amber-50 border-amber-200'
+                }`}>
+                <div className="flex justify-between items-center text-sm">
+                  <span>Total a enviar:</span>
+                  <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span>Distribuido:</span>
+                  <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {totalAmountToBeneficiaries.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span>Restante:</span>
+                  <span className={`font-bold ${remainingAmount < 0 ? 'text-red-600' : remainingAmount > 0.01 ? 'text-amber-600' : 'text-green-600'}`}>
+                    {getCurrency(fromCurrencyId)?.symbol} {remainingAmount.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
               {selectedBeneficiaries.map((b, index) => {
                 const account = getAccount(b.accountId);
                 if (!account) return null;
                 return (
                   <div key={b.accountId} className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-blue-600">Beneficiario {index + 1}</span>
-                      <span className="text-xs text-gray-500">
-                        Envías: {getCurrency(fromCurrencyId)?.symbol} {b.amountToSend.toFixed(2)}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                        Beneficiario {index + 1}
                       </span>
                     </div>
                     <p className="font-bold text-gray-900">{account.account_holder}</p>
                     <p className="text-sm text-gray-600">{account.bank_platform?.name}</p>
                     <p className="text-sm text-gray-500 font-mono">{account.account_number}</p>
-                    <div className="mt-2 pt-2 border-t border-blue-200 flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Recibe:</span>
-                      <span className="font-bold text-green-600 text-lg">
-                        {getCurrency(toCurrencyId)?.symbol} {(b.amountToSend * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
+
+                    {/* Editable amount input - only show if multiple beneficiaries */}
+                    {selectedBeneficiaries.length > 1 ? (
+                      <div className="mt-3 pt-3 border-t border-blue-200">
+                        <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                          Monto a enviar ({getCurrency(fromCurrencyId)?.code})
+                        </label>
+                        <div className="flex gap-2 items-center">
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold">
+                              {getCurrency(fromCurrencyId)?.symbol}
+                            </span>
+                            <input
+                              type="number"
+                              value={b.amountToSend || ''}
+                              onChange={(e) => updateBeneficiaryAmount(b.accountId, parseFloat(e.target.value) || 0)}
+                              className="input pl-8 py-2 text-lg font-bold w-full"
+                              placeholder="0.00"
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div className="text-right min-w-[90px]">
+                            <p className="text-xs text-gray-500">Recibe</p>
+                            <p className="font-bold text-green-600">
+                              {getCurrency(toCurrencyId)?.symbol} {(b.amountToSend * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 pt-3 border-t border-blue-200 flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Recibe:</span>
+                        <span className="font-bold text-green-600 text-lg">
+                          {getCurrency(toCurrencyId)?.symbol} {(b.amountToSend * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Proof Upload */}
+            {/* Datos bancarios de Fengxchange (placeholder) */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-5 text-white">
+              <div className="flex items-center gap-2 mb-3">
+                <Building className="flex-shrink-0" size={20} />
+                <h3 className="font-bold">Datos para depositar tu {getCurrency(fromCurrencyId)?.code}</h3>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
+                <div className="flex items-center justify-center gap-2 text-white/80">
+                  <Info size={18} />
+                  <p className="text-sm">
+                    Los datos bancarios de Fengxchange serán cargados por el administrador.
+                    Por ahora, contacta a soporte para obtener los datos de depósito.
+                  </p>
+                </div>
+                {/* TODO: Mostrar datos bancarios de Fengxchange según fromCurrencyId
+                    - Si es USD: cuenta Zelle, Wise, etc.
+                    - Si es EUR: cuenta SEPA, etc.
+                    Estos datos vendrán de la tabla company_bank_accounts configurada por el super admin
+                */}
+              </div>
+            </div>
+
+            {/* Proof Upload - Multiple images */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Upload size={18} className="text-gray-500" />
                 <label className="text-sm font-semibold text-gray-700">
-                  Comprobante de Pago *
+                  Comprobantes de Pago *
                 </label>
               </div>
               <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
                 <Info size={16} className="text-amber-600 flex-shrink-0" />
                 <p className="text-xs text-amber-700">
-                  Debes subir el comprobante de tu depósito para continuar.
+                  Sube capturas de pantalla o fotos de tus comprobantes de depósito.
                 </p>
               </div>
-              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${proofFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
+
+              {/* Uploaded images gallery */}
+              {proofPreviews.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {proofPreviews.map((preview, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={preview}
+                        alt={`Comprobante ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeProofFile(index)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload button */}
+              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${proofFiles.length > 0 ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
                 }`}>
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   onChange={handleProofChange}
                   className="hidden"
                 />
-                {proofPreview ? (
-                  <img src={proofPreview} alt="Comprobante" className="max-h-40 mx-auto rounded-lg" />
-                ) : (
-                  <>
-                    <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                    <p className="text-sm text-gray-500">
-                      Haz clic o arrastra una imagen
-                    </p>
-                  </>
-                )}
+                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
+                <p className="text-sm text-gray-500">
+                  {proofFiles.length > 0
+                    ? `${proofFiles.length} imagen(es) seleccionada(s) - Haz clic para agregar más`
+                    : 'Haz clic o arrastra imágenes'}
+                </p>
               </label>
             </div>
+
+            {/* Error Message - at the bottom */}
+            {error && (
+              <div className="flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-xl border border-red-200">
+                <AlertCircle size={20} />
+                <span>{error}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -693,7 +774,7 @@ export default function OperacionesPage() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={submitting || !proofFile}
+              disabled={submitting || proofFiles.length === 0}
               className="btn-primary flex items-center gap-2"
             >
               {submitting ? (

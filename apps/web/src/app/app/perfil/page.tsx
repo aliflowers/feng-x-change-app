@@ -15,7 +15,8 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  Globe
+  Globe,
+  ChevronDown
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -41,15 +42,141 @@ const documentTypes = [
   { value: 'RUT', label: 'RUT (Chile)' },
 ];
 
-const countries = [
-  'Venezuela', 'Colombia', 'Perú', 'Chile', 'Ecuador', 'Argentina', 'México',
-  'Estados Unidos', 'España', 'Panamá', 'República Dominicana', 'Brasil', 'Otro'
+// Países con códigos de bandera
+const countriesWithFlags = [
+  { value: 'Venezuela', code: 'VE' },
+  { value: 'Colombia', code: 'CO' },
+  { value: 'Perú', code: 'PE' },
+  { value: 'Chile', code: 'CL' },
+  { value: 'Ecuador', code: 'EC' },
+  { value: 'Argentina', code: 'AR' },
+  { value: 'México', code: 'MX' },
+  { value: 'Estados Unidos', code: 'US' },
+  { value: 'España', code: 'ES' },
+  { value: 'Panamá', code: 'PA' },
+  { value: 'República Dominicana', code: 'DO' },
+  { value: 'Brasil', code: 'BR' },
+  { value: 'Otro', code: 'WORLD' },
 ];
 
-const nationalities = [
-  'Venezolana', 'Colombiana', 'Peruana', 'Chilena', 'Ecuatoriana', 'Argentina', 'Mexicana',
-  'Estadounidense', 'Española', 'Panameña', 'Dominicana', 'Brasileña', 'Otra'
+// Nacionalidades con códigos de bandera
+const nationalitiesWithFlags = [
+  { value: 'Venezolana', code: 'VE' },
+  { value: 'Colombiana', code: 'CO' },
+  { value: 'Peruana', code: 'PE' },
+  { value: 'Chilena', code: 'CL' },
+  { value: 'Ecuatoriana', code: 'EC' },
+  { value: 'Argentina', code: 'AR' },
+  { value: 'Mexicana', code: 'MX' },
+  { value: 'Estadounidense', code: 'US' },
+  { value: 'Española', code: 'ES' },
+  { value: 'Panameña', code: 'PA' },
+  { value: 'Dominicana', code: 'DO' },
+  { value: 'Brasileña', code: 'BR' },
+  { value: 'Otra', code: 'WORLD' },
 ];
+
+// Componente de bandera por código de país
+const CountryFlag = ({ code, size = 20 }: { code: string; size?: number }) => {
+  const flags: Record<string, React.ReactNode> = {
+    VE: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#FFCC00" width="60" height="13.33" />
+        <rect fill="#00247D" y="13.33" width="60" height="13.33" />
+        <rect fill="#CF142B" y="26.66" width="60" height="13.34" />
+      </svg>
+    ),
+    CO: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#FCD116" width="60" height="20" />
+        <rect fill="#003893" y="20" width="60" height="10" />
+        <rect fill="#CE1126" y="30" width="60" height="10" />
+      </svg>
+    ),
+    PE: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#D91023" width="20" height="40" />
+        <rect fill="#fff" x="20" width="20" height="40" />
+        <rect fill="#D91023" x="40" width="20" height="40" />
+      </svg>
+    ),
+    CL: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#fff" width="60" height="20" />
+        <rect fill="#D52B1E" y="20" width="60" height="20" />
+        <rect fill="#0039A6" width="20" height="20" />
+      </svg>
+    ),
+    EC: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#FFD100" width="60" height="20" />
+        <rect fill="#0033A0" y="20" width="60" height="10" />
+        <rect fill="#CE1126" y="30" width="60" height="10" />
+      </svg>
+    ),
+    AR: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#74ACDF" width="60" height="13.33" />
+        <rect fill="#fff" y="13.33" width="60" height="13.33" />
+        <rect fill="#74ACDF" y="26.66" width="60" height="13.34" />
+      </svg>
+    ),
+    MX: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#006847" width="20" height="40" />
+        <rect fill="#fff" x="20" width="20" height="40" />
+        <rect fill="#CE1126" x="40" width="20" height="40" />
+      </svg>
+    ),
+    US: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#B22234" width="60" height="40" />
+        <g fill="#fff">{[0, 1, 2, 3, 4, 5].map(i => <rect key={i} y={i * 6.15 + 3.08} width="60" height="3.08" />)}</g>
+        <rect fill="#3C3B6E" width="24" height="21.54" />
+      </svg>
+    ),
+    ES: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#AA151B" width="60" height="10" />
+        <rect fill="#F1BF00" y="10" width="60" height="20" />
+        <rect fill="#AA151B" y="30" width="60" height="10" />
+      </svg>
+    ),
+    PA: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#fff" width="30" height="20" />
+        <rect fill="#005EB8" x="30" width="30" height="20" />
+        <rect fill="#DA121A" y="20" width="30" height="20" />
+        <rect fill="#fff" x="30" y="20" width="30" height="20" />
+      </svg>
+    ),
+    DO: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#002D62" width="30" height="20" />
+        <rect fill="#CE1126" x="30" width="30" height="20" />
+        <rect fill="#CE1126" y="20" width="30" height="20" />
+        <rect fill="#002D62" x="30" y="20" width="30" height="20" />
+        <rect fill="#fff" x="25" y="15" width="10" height="10" />
+      </svg>
+    ),
+    BR: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#009C3B" width="60" height="40" />
+        <polygon fill="#FFDF00" points="30,5 55,20 30,35 5,20" />
+        <circle cx="30" cy="20" r="8" fill="#002776" />
+      </svg>
+    ),
+    WORLD: (
+      <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded">
+        <rect fill="#4ECDC4" width="60" height="40" />
+        <circle cx="30" cy="20" r="14" fill="none" stroke="#fff" strokeWidth="2" />
+        <ellipse cx="30" cy="20" rx="7" ry="14" fill="none" stroke="#fff" strokeWidth="1.5" />
+        <line x1="16" y1="20" x2="44" y2="20" stroke="#fff" strokeWidth="1.5" />
+      </svg>
+    ),
+  };
+  return <span className="flex-shrink-0">{flags[code] || null}</span>;
+};
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -79,6 +206,8 @@ export default function ProfilePage() {
     new: false,
     confirm: false,
   });
+  const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -283,38 +412,99 @@ export default function ProfilePage() {
 
           {/* Nacionalidad y País */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Dropdown de Nacionalidad */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">Nacionalidad</label>
               <div className="relative">
-                <select
-                  name="nationality"
-                  value={formData.nationality || ''}
-                  onChange={handleChange}
-                  className="input appearance-none pl-10"
+                <button
+                  type="button"
+                  onClick={() => setShowNationalityDropdown(!showNationalityDropdown)}
+                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
                 >
-                  <option value="">Selecciona nacionalidad</option>
-                  {nationalities.map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  {formData.nationality ? (
+                    <>
+                      <CountryFlag code={nationalitiesWithFlags.find(n => n.value === formData.nationality)?.code || 'WORLD'} size={24} />
+                      <span className="flex-1 truncate">{formData.nationality}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="text-gray-400" size={18} />
+                      <span className="flex-1 text-gray-400">Selecciona nacionalidad</span>
+                    </>
+                  )}
+                  <ChevronDown className={`text-gray-400 transition-transform ${showNationalityDropdown ? 'rotate-180' : ''}`} size={18} />
+                </button>
+
+                {showNationalityDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowNationalityDropdown(false)} />
+                    <div className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl max-h-64 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                      {nationalitiesWithFlags.map(n => (
+                        <button
+                          key={n.value}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, nationality: n.value }));
+                            setShowNationalityDropdown(false);
+                          }}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-blue-50 transition-colors ${formData.nationality === n.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                        >
+                          <CountryFlag code={n.code} size={24} />
+                          <span className="flex-1">{n.value}</span>
+                          {formData.nationality === n.value && <CheckCircle2 className="text-blue-600" size={18} />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
+
+            {/* Dropdown de País de Residencia */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">País de Residencia</label>
               <div className="relative">
-                <select
-                  name="country"
-                  value={formData.country || ''}
-                  onChange={handleChange}
-                  className="input appearance-none pl-10"
+                <button
+                  type="button"
+                  onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
                 >
-                  <option value="">Selecciona país</option>
-                  {countries.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  {formData.country ? (
+                    <>
+                      <CountryFlag code={countriesWithFlags.find(c => c.value === formData.country)?.code || 'WORLD'} size={24} />
+                      <span className="flex-1 truncate">{formData.country}</span>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="text-gray-400" size={18} />
+                      <span className="flex-1 text-gray-400">Selecciona país</span>
+                    </>
+                  )}
+                  <ChevronDown className={`text-gray-400 transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} size={18} />
+                </button>
+
+                {showCountryDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowCountryDropdown(false)} />
+                    <div className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl max-h-64 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                      {countriesWithFlags.map(c => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, country: c.value }));
+                            setShowCountryDropdown(false);
+                          }}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-blue-50 transition-colors ${formData.country === c.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                        >
+                          <CountryFlag code={c.code} size={24} />
+                          <span className="flex-1">{c.value}</span>
+                          {formData.country === c.value && <CheckCircle2 className="text-blue-600" size={18} />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

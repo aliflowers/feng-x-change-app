@@ -91,7 +91,7 @@ export default function ClientLayout({
 
           {/* Navegación Desktop - Oculta en móvil */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.slice(0, 4).map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
@@ -99,8 +99,8 @@ export default function ClientLayout({
                   key={item.href}
                   href={item.href}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all no-underline ${isActive
-                      ? 'bg-white/20 text-white'
-                      : 'text-white/70 hover:text-white hover:bg-white/10'
+                    ? 'bg-white/20 text-white'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
                     }`}
                 >
                   <Icon size={18} />
@@ -126,21 +126,13 @@ export default function ClientLayout({
                 <ChevronDown size={16} className={`text-white/70 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Dropdown Menu */}
+              {/* Dropdown Menu - Solo cerrar sesión */}
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-900">{profile?.first_name} {profile?.last_name}</p>
                     <p className="text-xs text-gray-500 truncate">{profile?.email}</p>
                   </div>
-                  <Link
-                    href="/app/perfil"
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 no-underline transition-colors"
-                  >
-                    <User size={18} className="text-gray-400" />
-                    <span className="text-sm">Mi Perfil</span>
-                  </Link>
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-2.5 text-red-600 hover:bg-red-50 w-full transition-colors"
@@ -183,20 +175,20 @@ export default function ClientLayout({
             )}
           </div>
         </div>
-      </header>
+      </header >
 
       {/* Contenido principal - Con padding inferior para el bottom nav en móvil */}
-      <main className="container-app py-6 md:py-8">{children}</main>
+      < main className="container-app py-6 md:py-8" > {children}</main >
 
       {/* Footer Desktop */}
-      <footer className="hidden md:block border-t border-gray-200 bg-white/50 mt-auto">
+      < footer className="hidden md:block border-t border-gray-200 bg-white/50 mt-auto" >
         <div className="container-app py-4 text-center">
           <p className="text-xs text-gray-400">© 2026 Fengxchange. Todos los derechos reservados.</p>
         </div>
-      </footer>
+      </footer >
 
       {/* Bottom Navigation - Solo móvil/tablet (fixed en la parte inferior) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 safe-area-bottom">
+      < nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 safe-area-bottom" >
         <div className="flex items-center justify-around h-16">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -206,8 +198,8 @@ export default function ClientLayout({
                 key={item.href}
                 href={item.href}
                 className={`flex flex-col items-center justify-center flex-1 h-full py-2 no-underline transition-colors ${isActive
-                    ? 'text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-blue-100' : ''}`}>
@@ -220,7 +212,7 @@ export default function ClientLayout({
             );
           })}
         </div>
-      </nav>
-    </div>
+      </nav >
+    </div >
   );
 }
