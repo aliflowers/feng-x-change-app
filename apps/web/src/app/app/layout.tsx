@@ -39,6 +39,7 @@ export default function ClientLayout({
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -55,16 +56,25 @@ export default function ClientLayout({
     loadProfile();
   }, []);
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside (only when menu is open)
   useEffect(() => {
+    if (!showUserMenu) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const isOutsideDesktop = menuRef.current && !menuRef.current.contains(target);
+      const isOutsideMobile = mobileMenuRef.current && !mobileMenuRef.current.contains(target);
+
+      // Only close if click is outside BOTH menus (one may be null/hidden)
+      if ((menuRef.current === null || isOutsideDesktop) &&
+        (mobileMenuRef.current === null || isOutsideMobile)) {
         setShowUserMenu(false);
       }
     };
+    // Use mousedown to close before click propagates
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [showUserMenu]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -134,7 +144,10 @@ export default function ClientLayout({
                     <p className="text-xs text-gray-500 truncate">{profile?.email}</p>
                   </div>
                   <button
-                    onClick={handleLogout}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLogout();
+                    }}
                     className="flex items-center gap-3 px-4 py-2.5 text-red-600 hover:bg-red-50 w-full transition-colors"
                   >
                     <LogOut size={18} />
@@ -146,7 +159,7 @@ export default function ClientLayout({
           </div>
 
           {/* Avatar Móvil - Solo visible en móvil */}
-          <div className="md:hidden relative" ref={menuRef}>
+          <div className="md:hidden relative" ref={mobileMenuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl p-2 transition-all"

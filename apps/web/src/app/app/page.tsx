@@ -9,7 +9,8 @@ import {
  TrendingUp,
  Clock,
  Sparkles,
- ChevronRight
+ ChevronRight,
+ CheckCircle2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -18,23 +19,102 @@ interface UserProfile {
  last_name: string;
 }
 
+interface Stats {
+ operationsThisMonth: number;
+ registeredAccounts: number;
+ pendingTransactions: number;
+}
+
+interface RecentTransaction {
+ id: string;
+ transaction_number: string;
+ amount_sent: number;
+ amount_received: number;
+ status: string;
+ created_at: string;
+ from_currency: { code: string; symbol: string }[] | { code: string; symbol: string } | null;
+ to_currency: { code: string; symbol: string }[] | { code: string; symbol: string } | null;
+ beneficiary: { alias: string; account_holder: string }[] | { alias: string; account_holder: string } | null;
+}
+
 export default function ClientDashboard() {
  const [profile, setProfile] = useState<UserProfile | null>(null);
  const [greeting, setGreeting] = useState('¡Hola!');
+ const [stats, setStats] = useState<Stats>({
+  operationsThisMonth: 0,
+  registeredAccounts: 0,
+  pendingTransactions: 0,
+ });
+ const [loadingStats, setLoadingStats] = useState(true);
+ const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
 
  useEffect(() => {
-  const loadProfile = async () => {
+  const loadData = async () => {
    const { data: { user } } = await supabase.auth.getUser();
    if (user) {
-    const { data } = await supabase
+    // Load profile
+    const { data: profileData } = await supabase
      .from('profiles')
      .select('first_name, last_name')
      .eq('id', user.id)
      .single();
-    if (data) setProfile(data);
+    if (profileData) setProfile(profileData);
+
+    // Get current month date range
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    // Count operations this month
+    const { count: operationsCount } = await supabase
+     .from('transactions')
+     .select('*', { count: 'exact', head: true })
+     .eq('user_id', user.id)
+     .gte('created_at', firstDayOfMonth);
+
+    // Count registered accounts
+    const { count: accountsCount } = await supabase
+     .from('user_bank_accounts')
+     .select('*', { count: 'exact', head: true })
+     .eq('user_id', user.id);
+
+    // Count pending transactions (POOL or TAKEN status)
+    const { count: pendingCount } = await supabase
+     .from('transactions')
+     .select('*', { count: 'exact', head: true })
+     .eq('user_id', user.id)
+     .in('status', ['POOL', 'TAKEN']);
+
+    setStats({
+     operationsThisMonth: operationsCount || 0,
+     registeredAccounts: accountsCount || 0,
+     pendingTransactions: pendingCount || 0,
+    });
+
+    // Get recent transactions (last 5)
+    const { data: recentData } = await supabase
+     .from('transactions')
+     .select(`
+      id,
+      transaction_number,
+      amount_sent,
+      amount_received,
+      status,
+      created_at,
+      from_currency:currencies!transactions_from_currency_id_fkey(code, symbol),
+      to_currency:currencies!transactions_to_currency_id_fkey(code, symbol),
+      beneficiary:user_bank_accounts(alias, account_holder)
+     `)
+     .eq('user_id', user.id)
+     .order('created_at', { ascending: false })
+     .limit(5);
+
+    if (recentData) {
+     setRecentTransactions(recentData as RecentTransaction[]);
+    }
    }
+   setLoadingStats(false);
   };
-  loadProfile();
+  loadData();
 
   // Set greeting based on time
   const hour = new Date().getHours();
@@ -116,7 +196,7 @@ export default function ClientDashboard() {
       </div>
       <span className="text-xs text-gray-500 font-semibold uppercase">Operaciones</span>
      </div>
-     <p className="text-2xl font-bold text-gray-900">0</p>
+     <p className="text-2xl font-bold text-gray-900">{loadingStats ? '--' : stats.operationsThisMonth}</p>
      <p className="text-xs text-gray-400">Este mes</p>
     </div>
 
@@ -127,7 +207,7 @@ export default function ClientDashboard() {
       </div>
       <span className="text-xs text-gray-500 font-semibold uppercase">Cuentas</span>
      </div>
-     <p className="text-2xl font-bold text-gray-900">--</p>
+     <p className="text-2xl font-bold text-gray-900">{loadingStats ? '--' : stats.registeredAccounts}</p>
      <p className="text-xs text-gray-400">Registradas</p>
     </div>
 
@@ -138,7 +218,7 @@ export default function ClientDashboard() {
       </div>
       <span className="text-xs text-gray-500 font-semibold uppercase">En proceso</span>
      </div>
-     <p className="text-2xl font-bold text-gray-900">0</p>
+     <p className="text-2xl font-bold text-gray-900">{loadingStats ? '--' : stats.pendingTransactions}</p>
      <p className="text-xs text-gray-400">Pendientes</p>
     </div>
    </div>
@@ -190,22 +270,88 @@ export default function ClientDashboard() {
       </Link>
      </div>
     </div>
-    <div className="p-12 text-center">
-     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-      <History className="text-gray-400" size={32} />
+    {recentTransactions.length > 0 ? (
+     <div className="overflow-x-auto">
+      <table className="w-full">
+       <thead className="bg-gray-50 border-b border-gray-100">
+        <tr>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Enviaste</th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Recibiste</th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Beneficiario</th>
+         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+        </tr>
+       </thead>
+       <tbody className="divide-y divide-gray-100">
+        {recentTransactions.map((tx) => {
+         const fromCurrency = Array.isArray(tx.from_currency) ? tx.from_currency[0] : tx.from_currency;
+         const toCurrency = Array.isArray(tx.to_currency) ? tx.to_currency[0] : tx.to_currency;
+         const beneficiary = Array.isArray(tx.beneficiary) ? tx.beneficiary[0] : tx.beneficiary;
+         const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+          POOL: { label: 'En Proceso', color: 'text-amber-600 bg-amber-50', icon: <Clock size={12} /> },
+          TAKEN: { label: 'En Proceso', color: 'text-amber-600 bg-amber-50', icon: <Clock size={12} /> },
+          COMPLETED: { label: 'Completado', color: 'text-green-600 bg-green-50', icon: <CheckCircle2 size={12} /> },
+          REJECTED: { label: 'Rechazado', color: 'text-red-600 bg-red-50', icon: <History size={12} /> },
+         };
+         const status = statusConfig[tx.status] || statusConfig.POOL;
+
+         return (
+          <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+           <td className="px-4 py-3 whitespace-nowrap">
+            <p className="text-sm text-gray-900">
+             {new Date(tx.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+            </p>
+            <p className="text-xs text-gray-500">
+             {new Date(tx.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+           </td>
+           <td className="px-4 py-3 whitespace-nowrap">
+            <p className="text-sm font-semibold text-gray-900">
+             {fromCurrency?.symbol || ''}{tx.amount_sent.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500">{fromCurrency?.code || ''}</p>
+           </td>
+           <td className="px-4 py-3 whitespace-nowrap">
+            <p className="text-sm font-semibold text-green-600">
+             {toCurrency?.symbol || ''}{tx.amount_received.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500">{toCurrency?.code || ''}</p>
+           </td>
+           <td className="px-4 py-3">
+            <p className="text-sm text-gray-900 truncate max-w-[150px]">
+             {beneficiary?.alias || beneficiary?.account_holder || '-'}
+            </p>
+           </td>
+           <td className="px-4 py-3 whitespace-nowrap text-right">
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+             {status.icon}
+             {status.label}
+            </span>
+           </td>
+          </tr>
+         );
+        })}
+       </tbody>
+      </table>
      </div>
-     <h3 className="text-lg font-semibold text-gray-700 mb-2">No tienes operaciones recientes</h3>
-     <p className="text-gray-500 mb-6 max-w-md mx-auto">
-      Cuando realices tu primera operación de cambio, aparecerá aquí.
-     </p>
-     <Link
-      href="/app/operaciones"
-      className="btn-primary inline-flex items-center gap-2"
-     >
-      <ArrowRightLeft size={20} />
-      Realizar mi primera operación
-     </Link>
-    </div>
+    ) : (
+     <div className="p-12 text-center">
+      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+       <History className="text-gray-400" size={32} />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-700 mb-2">No tienes operaciones recientes</h3>
+      <p className="text-gray-500 mb-6 max-w-md mx-auto">
+       Cuando realices tu primera operación de cambio, aparecerá aquí.
+      </p>
+      <Link
+       href="/app/operaciones"
+       className="btn-primary inline-flex items-center gap-2"
+      >
+       <ArrowRightLeft size={20} />
+       Realizar mi primera operación
+      </Link>
+     </div>
+    )}
    </div>
   </div>
  );
