@@ -70,6 +70,14 @@ export default function HomePage() {
  const currentRate = exchangeRates.find(r => r.from === fromCurrency && r.to === toCurrency);
  const receivedAmount = currentRate ? (parseFloat(amount) || 0) * currentRate.rate : 0;
 
+ // Función para formatear números consistentemente (evita hydration mismatch)
+ const formatNumber = (num: number, decimals: number = 0) => {
+  return new Intl.NumberFormat('en-US', {
+   minimumFractionDigits: decimals,
+   maximumFractionDigits: decimals,
+  }).format(num);
+ };
+
  // Efecto de scroll para header sticky
  useEffect(() => {
   const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -86,7 +94,7 @@ export default function HomePage() {
       <span key={i} className="inline-flex items-center gap-2 text-white/90 text-sm">
        <span className="text-lg">{rate.flag}</span>
        <span className="font-semibold">{rate.from} → {rate.to}:</span>
-       <span className="text-amber-400 font-bold">{rate.symbol} {rate.rate.toLocaleString()}</span>
+       <span className="text-amber-400 font-bold">{rate.symbol} {formatNumber(rate.rate)}</span>
       </span>
      ))}
     </div>
@@ -269,10 +277,10 @@ export default function HomePage() {
         <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
          <label className="text-sm font-medium text-green-700 mb-1 block">Monto a Recibir</label>
          <p className="text-3xl font-bold text-green-600">
-          {currentRate?.symbol} {receivedAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          {currentRate?.symbol} {formatNumber(receivedAmount, 2)}
          </p>
          <p className="text-sm text-green-600/70 mt-1">
-          Tasa: 1 {fromCurrency} = {currentRate?.rate.toLocaleString()} {toCurrency}
+          Tasa: 1 {fromCurrency} = {formatNumber(currentRate?.rate || 0)} {toCurrency}
          </p>
         </div>
 
@@ -413,7 +421,7 @@ export default function HomePage() {
          <span className="font-medium">{rate.to}</span>
         </span>
         <span className="text-center font-bold text-lg text-[#05294F]">
-         {rate.symbol} {rate.rate.toLocaleString()}
+         {rate.symbol} {formatNumber(rate.rate)}
         </span>
         <div className="text-right">
          <Link href="/register" className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-lg font-medium text-sm hover:shadow-lg transition-all no-underline">
