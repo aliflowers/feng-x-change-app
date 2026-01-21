@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, UserPlus, ArrowRight, Shield, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -116,207 +116,324 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="min-h-screen bg-hero-gradient flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold text-white">
-            Fengxchange
-          </Link>
-          <p className="text-white/70 mt-2">Crea tu cuenta gratis</p>
+    <main className="min-h-screen flex">
+      {/* Panel Izquierdo - Branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#05294F] via-[#07478F] to-[#0a5cb8] relative overflow-hidden">
+        {/* Decoraciones de fondo */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-amber-400 rounded-full blur-3xl"></div>
         </div>
 
-        {/* Card de registro */}
-        <div className="card">
-          <form onSubmit={handleRegister} className="space-y-5">
-            {/* Error */}
-            {error && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
-                {error}
-              </div>
-            )}
-
-            {/* Nombre y Apellido */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="first_name" className="block text-sm font-medium text-text-dark mb-2">
-                  Nombre
-                </label>
-                <input
-                  id="first_name"
-                  name="first_name"
-                  type="text"
-                  value={formData.first_name}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Juan"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="last_name" className="block text-sm font-medium text-text-dark mb-2">
-                  Apellido
-                </label>
-                <input
-                  id="last_name"
-                  name="last_name"
-                  type="text"
-                  value={formData.last_name}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Pérez"
-                  required
-                />
-              </div>
+        {/* Contenido */}
+        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 mb-12 no-underline">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+              <span className="text-white font-bold text-2xl">F</span>
             </div>
+            <span className="text-3xl font-bold text-white">Fengxchange</span>
+          </Link>
 
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text-dark mb-2">
-                Correo electrónico
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="input"
-                placeholder="tu@email.com"
-                required
-              />
-            </div>
+          {/* Título principal */}
+          <h1 className="text-4xl xl:text-5xl font-bold text-white mb-6 leading-tight">
+            Únete a la plataforma líder en
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400"> envío de dinero</span>
+          </h1>
 
-            {/* Teléfono (opcional) */}
-            <div>
-              <label htmlFor="phone_number" className="block text-sm font-medium text-text-dark mb-2">
-                Teléfono <span className="text-gray-400">(opcional)</span>
-              </label>
-              <input
-                id="phone_number"
-                name="phone_number"
-                type="tel"
-                value={formData.phone_number}
-                onChange={handleChange}
-                className="input"
-                placeholder="+58 412 1234567"
-              />
-            </div>
+          <p className="text-white/70 text-lg mb-12 max-w-md">
+            Crea tu cuenta gratis y comienza a enviar dinero a tus seres queridos en minutos.
+          </p>
 
-            {/* Código de Agente (opcional) */}
-            <div>
-              <label htmlFor="agent_code" className="block text-sm font-medium text-text-dark mb-2">
-                Código de Agente <span className="text-gray-400">(opcional)</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="agent_code"
-                  name="agent_code"
-                  type="text"
-                  value={formData.agent_code}
-                  onChange={handleChange}
-                  className={`input uppercase ${agentCodeValid === true
-                    ? 'border-green-500 focus:ring-green-500/50'
-                    : agentCodeValid === false
-                      ? 'border-red-500 focus:ring-red-500/50'
-                      : ''
-                    }`}
-                  placeholder="AG-XXXXX"
-                  maxLength={8}
-                />
-                {agentCodeValid !== null && (
-                  <span
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-lg ${agentCodeValid ? 'text-green-500' : 'text-red-500'
-                      }`}
-                  >
-                    {agentCodeValid ? '✓' : '✗'}
-                  </span>
-                )}
+          {/* Benefits */}
+          <div className="space-y-4">
+            {[
+              { icon: CheckCircle, text: 'Registro rápido y gratuito' },
+              { icon: Shield, text: 'Tus datos están protegidos' },
+              { icon: Zap, text: 'Primera transferencia en minutos' },
+              { icon: Globe, text: 'Envíos a múltiples países' },
+            ].map((feature, i) => (
+              <div key={i} className="flex items-center gap-4 text-white/80">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                  <feature.icon size={20} className="text-amber-400" />
+                </div>
+                <span>{feature.text}</span>
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Si un agente te refirió, ingresa su código aquí
-              </p>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-text-dark mb-2">
-                Contraseña
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="input pr-10"
-                  placeholder="Mínimo 8 caracteres"
-                  required
-                  minLength={8}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-text-dark transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-dark mb-2">
-                Confirmar Contraseña
-              </label>
-              <div className="relative">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="input pr-10"
-                  placeholder="Repite la contraseña"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-text-dark transition-colors"
-                  tabIndex={-1}
-                >
-                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full"
-            >
-              {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
-            </button>
-          </form>
-
-          {/* Links */}
-          <div className="mt-6 text-center text-sm text-gray-500">
-            ¿Ya tienes cuenta?{' '}
-            <Link href="/login" className="text-primary font-medium">
-              Inicia sesión
-            </Link>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Volver */}
-        <div className="mt-6 text-center">
-          <Link href="/" className="text-white/70 text-sm hover:text-white">
-            ← Volver al inicio
-          </Link>
+      {/* Panel Derecho - Formulario */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-gradient-to-br from-slate-50 to-blue-50 overflow-y-auto">
+        <div className="w-full max-w-md py-8">
+          {/* Logo móvil */}
+          <div className="lg:hidden text-center mb-8">
+            <Link href="/" className="inline-flex items-center gap-3 no-underline">
+              <div className="w-12 h-12 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-xl">F</span>
+              </div>
+              <span className="text-2xl font-bold text-gray-900">Fengxchange</span>
+            </Link>
+          </div>
+
+          {/* Título del formulario */}
+          <div className="text-center lg:text-left mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+              Crear Cuenta
+            </h2>
+            <p className="text-gray-500">
+              Completa tus datos para comenzar
+            </p>
+          </div>
+
+          {/* Card de registro */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
+            <form onSubmit={handleRegister} className="space-y-4">
+              {/* Error */}
+              {error && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-red-500">!</span>
+                  </div>
+                  {error}
+                </div>
+              )}
+
+              {/* Nombre y Apellido */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Nombre
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <User size={18} />
+                    </div>
+                    <input
+                      id="first_name"
+                      name="first_name"
+                      type="text"
+                      value={formData.first_name}
+                      onChange={handleChange}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                      placeholder="Juan"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Apellido
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <User size={18} />
+                    </div>
+                    <input
+                      id="last_name"
+                      name="last_name"
+                      type="text"
+                      value={formData.last_name}
+                      onChange={handleChange}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                      placeholder="Pérez"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Correo electrónico
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                    placeholder="tu@email.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Teléfono */}
+              <div>
+                <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Phone size={18} />
+                  </div>
+                  <input
+                    id="phone_number"
+                    name="phone_number"
+                    type="tel"
+                    value={formData.phone_number}
+                    onChange={handleChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                    placeholder="+58 412 1234567"
+                  />
+                </div>
+              </div>
+
+              {/* Código de Agente */}
+              <div>
+                <label htmlFor="agent_code" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Código de Agente <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <UserPlus size={18} />
+                  </div>
+                  <input
+                    id="agent_code"
+                    name="agent_code"
+                    type="text"
+                    value={formData.agent_code}
+                    onChange={handleChange}
+                    className={`w-full bg-gray-50 border rounded-xl px-3 py-3 pl-10 pr-10 text-gray-900 text-sm uppercase focus:ring-2 focus:border-transparent transition-all ${agentCodeValid === true
+                        ? 'border-green-500 focus:ring-green-500/50'
+                        : agentCodeValid === false
+                          ? 'border-red-500 focus:ring-red-500/50'
+                          : 'border-gray-200 focus:ring-[#05294F]'
+                      }`}
+                    placeholder="AG-XXXXX"
+                    maxLength={8}
+                  />
+                  {agentCodeValid !== null && (
+                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${agentCodeValid ? 'text-green-500' : 'text-red-500'}`}>
+                      {agentCodeValid ? <CheckCircle size={18} /> : '✗'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Si un agente te refirió, ingresa su código
+                </p>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 pr-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                    placeholder="Mínimo 8 caracteres"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Confirmar Contraseña
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 pr-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                    placeholder="Repite la contraseña"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Creando cuenta...
+                  </span>
+                ) : (
+                  <>
+                    Crear Cuenta Gratis
+                    <ArrowRight size={20} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-white text-gray-400">o</span>
+              </div>
+            </div>
+
+            {/* Login */}
+            <div className="text-center">
+              <p className="text-gray-500 text-sm">
+                ¿Ya tienes cuenta?{' '}
+                <Link href="/login" className="text-[#05294F] font-semibold hover:underline no-underline">
+                  Inicia sesión
+                </Link>
+              </p>
+            </div>
+          </div>
+
+          {/* Volver */}
+          <div className="mt-8 text-center">
+            <Link href="/" className="inline-flex items-center gap-2 text-gray-500 text-sm hover:text-gray-700 transition-colors no-underline">
+              <ArrowRight size={16} className="rotate-180" />
+              Volver al inicio
+            </Link>
+          </div>
         </div>
       </div>
     </main>

@@ -181,11 +181,11 @@ export default function HomePage() {
   return () => window.removeEventListener('scroll', handleScroll);
  }, []);
 
- // Efecto para rotar países cada 2 segundos
+ // Efecto para rotar países cada 1 segundo
  useEffect(() => {
   const interval = setInterval(() => {
    setCurrentCountryIndex((prev) => (prev + 1) % countries.length);
-  }, 2000);
+  }, 1000);
   return () => clearInterval(interval);
  }, [countries.length]);
 
@@ -268,8 +268,22 @@ export default function HomePage() {
     </header>
 
     {/* Hero Section con Calculadora */}
-    <section className="relative min-h-[90vh] bg-gradient-to-br from-[#05294F] via-[#07478F] to-[#0a5cb8] flex items-center -mt-20 pt-20">
-     {/* Background Pattern */}
+    <section className="relative min-h-[90vh] flex items-center -mt-20 pt-20">
+     {/* Imagen de fondo */}
+     <div className="absolute inset-0">
+      <Image
+       src="/images/cambio_divisas.png"
+       alt="Cambio de divisas"
+       fill
+       className="object-cover"
+       priority
+      />
+     </div>
+
+     {/* Overlay azul con gradiente */}
+     <div className="absolute inset-0 bg-gradient-to-br from-[#05294F]/95 via-[#07478F]/93 to-[#0a5cb8]/95"></div>
+
+     {/* Background Pattern decorativo */}
      <div className="absolute inset-0 opacity-10">
       <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl"></div>
       <div className="absolute bottom-20 right-10 w-96 h-96 bg-amber-400 rounded-full blur-3xl"></div>
@@ -449,7 +463,7 @@ export default function HomePage() {
     </section>
 
     {/* Cómo Funciona */}
-    <section id="como-funciona" className="py-20 bg-gradient-to-br from-slate-50 to-blue-50">
+    <section id="como-funciona" className="py-20 bg-gradient-to-br from-slate-100 to-blue-100">
      <div className="container mx-auto px-4">
       <div className="text-center mb-16">
        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -504,7 +518,7 @@ export default function HomePage() {
     </section>
 
     {/* Tabla de Tasas */}
-    <section id="tasas" className="py-20 bg-gradient-to-br from-slate-50 to-blue-50">
+    <section id="tasas" className="py-20 bg-gradient-to-br from-slate-100 to-blue-100">
      <div className="container mx-auto px-4">
       <div className="text-center mb-12">
        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -562,72 +576,72 @@ export default function HomePage() {
      </div>
     </section>
 
-    
-     
-     {/* Testimonios de Clientes - Carrusel Animado */}
-     <section className="py-20 bg-white overflow-hidden">
-      <div className="container mx-auto px-4">
-       <div className="text-center mb-12">
-        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-         Lo que dicen nuestros <span className="text-[#05294F]">clientes</span>
-        </h2>
-        <p className="text-gray-600 max-w-2xl mx-auto">
-         Miles de personas confían en Fengxchange para sus transferencias internacionales
-        </p>
-       </div>
-      </div>
 
-      {/* Carrusel de testimonios */}
-      <div className="animate-marquee-slow flex gap-6">
-       {[...Array(2)].map((_, setIndex) => (
-        <div key={setIndex} className="flex gap-6 shrink-0">
-         {[
-          { name: 'María González', conversion: 'USD → VES', review: 'Excelente servicio, mi dinero llegó en menos de 10 minutos. La tasa fue mejor que en otros lugares. ¡100% recomendado!' },
-          { name: 'Carlos Rodríguez', conversion: 'COP → VES', review: 'Llevo 6 meses usando Fengxchange y nunca he tenido problemas. El soporte responde súper rápido por WhatsApp.' },
-          { name: 'Ana Martínez', conversion: 'USD → COP', review: 'La mejor plataforma para enviar dinero a Colombia. Tasas justas y transferencias instantáneas.' },
-          { name: 'José Hernández', conversion: 'EUR → VES', review: 'Desde España envío dinero a Venezuela cada mes. Fengxchange me ha ahorrado mucho en comisiones.' },
-          { name: 'Patricia López', conversion: 'USD → PEN', review: 'Muy fácil de usar, incluso para personas que no somos muy tecnológicas. El proceso es súper sencillo.' },
-          { name: 'Miguel Sánchez', conversion: 'VES → COP', review: 'Necesitaba enviar bolívares a Colombia urgentemente y Fengxchange me salvó. En 15 minutos llegó.' },
-          { name: 'Laura Pérez', conversion: 'USD → CLP', review: 'Las mejores tasas para Chile que he encontrado. Ya recomendé la plataforma a todos mis amigos.' },
-          { name: 'Roberto Díaz', conversion: 'PAYPAL → VES', review: 'Pude cambiar mi saldo de PayPal a bolívares sin ningún problema. Proceso rápido y tasa competitiva.' },
-          { name: 'Carmen Ruiz', conversion: 'COP → PEN', review: 'Excelente para envíos entre países latinoamericanos. La atención al cliente es de primera calidad.' },
-          { name: 'Fernando Torres', conversion: 'USD → VES', review: 'Ya perdí la cuenta de cuántas transferencias he hecho. Siempre puntuales y con las mejores tasas.' },
-         ].map((testimonial, i) => (
-          <div 
-           key={i} 
-           className="w-80 shrink-0 bg-gradient-to-br from-slate-50 to-blue-50 border border-gray-100 rounded-2xl p-6 shadow-lg"
-          >
-           {/* Estrellas */}
-           <div className="flex gap-1 mb-3">
-            {[...Array(5)].map((_, j) => (
-             <svg key={j} className="w-4 h-4 text-amber-400 fill-current" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-             </svg>
-            ))}
-           </div>
-           
-           {/* Review */}
-           <p className="text-gray-700 text-sm mb-4 leading-relaxed whitespace-normal">&quot;{testimonial.review}&quot;</p>
-           
-           {/* Cliente info */}
-           <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-            <div className="flex items-center gap-2">
-             <div className="w-8 h-8 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-full flex items-center justify-center text-white font-bold text-xs">
-              {testimonial.name.split(' ').map(n => n[0]).join('')}
-             </div>
-             <span className="font-semibold text-gray-900 text-sm">{testimonial.name}</span>
-            </div>
-            <span className="text-xs font-medium text-[#05294F] bg-blue-100 px-2 py-1 rounded-full">
-             {testimonial.conversion}
-            </span>
-           </div>
-          </div>
-         ))}
-        </div>
-       ))}
+
+    {/* Testimonios de Clientes - Carrusel Animado */}
+    <section className="py-20 bg-white overflow-hidden">
+     <div className="container mx-auto px-4">
+      <div className="text-center mb-12">
+       <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        Lo que dicen nuestros <span className="text-[#05294F]">clientes</span>
+       </h2>
+       <p className="text-gray-600 max-w-2xl mx-auto">
+        Miles de personas confían en Fengxchange para sus transferencias internacionales
+       </p>
       </div>
-     </section>
-{/* CTA Final */}
+     </div>
+
+     {/* Carrusel de testimonios */}
+     <div className="animate-marquee-slow flex gap-6">
+      {[...Array(2)].map((_, setIndex) => (
+       <div key={setIndex} className="flex gap-6 shrink-0">
+        {[
+         { name: 'María González', conversion: 'USD → VES', review: 'Excelente servicio, mi dinero llegó en menos de 10 minutos. La tasa fue mejor que en otros lugares. ¡100% recomendado!' },
+         { name: 'Carlos Rodríguez', conversion: 'COP → VES', review: 'Llevo 6 meses usando Fengxchange y nunca he tenido problemas. El soporte responde súper rápido por WhatsApp.' },
+         { name: 'Ana Martínez', conversion: 'USD → COP', review: 'La mejor plataforma para enviar dinero a Colombia. Tasas justas y transferencias instantáneas.' },
+         { name: 'José Hernández', conversion: 'EUR → VES', review: 'Desde España envío dinero a Venezuela cada mes. Fengxchange me ha ahorrado mucho en comisiones.' },
+         { name: 'Patricia López', conversion: 'USD → PEN', review: 'Muy fácil de usar, incluso para personas que no somos muy tecnológicas. El proceso es súper sencillo.' },
+         { name: 'Miguel Sánchez', conversion: 'VES → COP', review: 'Necesitaba enviar bolívares a Colombia urgentemente y Fengxchange me salvó. En 15 minutos llegó.' },
+         { name: 'Laura Pérez', conversion: 'USD → CLP', review: 'Las mejores tasas para Chile que he encontrado. Ya recomendé la plataforma a todos mis amigos.' },
+         { name: 'Roberto Díaz', conversion: 'PAYPAL → VES', review: 'Pude cambiar mi saldo de PayPal a bolívares sin ningún problema. Proceso rápido y tasa competitiva.' },
+         { name: 'Carmen Ruiz', conversion: 'COP → PEN', review: 'Excelente para envíos entre países latinoamericanos. La atención al cliente es de primera calidad.' },
+         { name: 'Fernando Torres', conversion: 'USD → VES', review: 'Ya perdí la cuenta de cuántas transferencias he hecho. Siempre puntuales y con las mejores tasas.' },
+        ].map((testimonial, i) => (
+         <div
+          key={i}
+          className="w-80 shrink-0 bg-gradient-to-br from-slate-100 to-blue-100 border border-gray-100 rounded-2xl p-6 shadow-lg"
+         >
+          {/* Estrellas */}
+          <div className="flex gap-1 mb-3">
+           {[...Array(5)].map((_, j) => (
+            <svg key={j} className="w-4 h-4 text-amber-400 fill-current" viewBox="0 0 20 20">
+             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+           ))}
+          </div>
+
+          {/* Review */}
+          <p className="text-gray-700 text-sm mb-4 leading-relaxed whitespace-normal">&quot;{testimonial.review}&quot;</p>
+
+          {/* Cliente info */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+           <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-full flex items-center justify-center text-white font-bold text-xs">
+             {testimonial.name.split(' ').map(n => n[0]).join('')}
+            </div>
+            <span className="font-semibold text-gray-900 text-sm">{testimonial.name}</span>
+           </div>
+           <span className="text-xs font-medium text-[#05294F] bg-blue-100 px-2 py-1 rounded-full">
+            {testimonial.conversion}
+           </span>
+          </div>
+         </div>
+        ))}
+       </div>
+      ))}
+     </div>
+    </section>
+    {/* CTA Final */}
     <section className="py-20 bg-gradient-to-br from-[#05294F] via-[#07478F] to-[#0a5cb8] relative overflow-hidden">
      <div className="absolute inset-0 opacity-10">
       <div className="absolute top-10 left-20 w-64 h-64 bg-white rounded-full blur-3xl"></div>
