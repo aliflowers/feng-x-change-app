@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Montserrat } from 'next/font/google';
 import './globals.css';
+import { CodeInspectorWrapper } from '@/components/CodeInspectorWrapper';
 
 // Configuración de la fuente Montserrat
 const montserrat = Montserrat({
@@ -91,7 +92,9 @@ export default function RootLayout({
  return (
   <html lang="es" className={montserrat.variable}>
    <body className="min-h-screen bg-white font-sans antialiased">
-    {children}
+    <CodeInspectorWrapper>
+     {children}
+    </CodeInspectorWrapper>
    </body>
   </html>
  );
