@@ -72,6 +72,7 @@
   a {
     @apply text-primary hover:underline transition-colors;
   }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
@@ -99,6 +100,7 @@
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
@@ -124,6 +126,10 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+  }
+
+  * {
+    @apply border-border;
   }
 }
 
@@ -229,7 +235,7 @@
   }
 
   .timer-danger {
-    @apply text-red-600 animate-pulse-slow;
+    @apply text-red-600;
   }
 
   /* Skeleton loading */
@@ -242,21 +248,41 @@
    RESPONSIVE BREAKPOINTS (Mobile First)
    ============================================ */
 
-/* Ocultar en móvil, mostrar en desktop */
 .hide-mobile {
   @apply hidden md:block;
 }
 
-/* Mostrar en móvil, ocultar en desktop */
 .show-mobile {
   @apply block md:hidden;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+/* ============================================
+   ANIMACIONES LANDING PAGE
+   ============================================ */
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 2s ease-in-out infinite;
 }
