@@ -14,6 +14,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldX,
+  CheckCircle2,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -82,8 +83,11 @@ export default function ClientesPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showBeneficiariesModal, setShowBeneficiariesModal] = useState(false);
   const [clientTransactions, setClientTransactions] = useState<any[]>([]);
+  const [clientBeneficiaries, setClientBeneficiaries] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -245,6 +249,40 @@ export default function ClientesPage() {
       console.error('Error loading transactions:', error);
     } finally {
       setLoadingTransactions(false);
+    }
+  };
+
+  const loadClientBeneficiaries = async (clientId: string) => {
+    setLoadingBeneficiaries(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_bank_accounts')
+        .select(`
+          id,
+          account_holder,
+          account_number,
+          document_type,
+          document_number,
+          is_active,
+          created_at,
+          bank_platform:banks_platforms(id, name, country)
+        `)
+        .eq('user_id', clientId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform data
+      const transformed = (data || []).map(b => ({
+        ...b,
+        bank_platform: Array.isArray(b.bank_platform) ? b.bank_platform[0] : b.bank_platform,
+      }));
+
+      setClientBeneficiaries(transformed);
+    } catch (error) {
+      console.error('Error loading beneficiaries:', error);
+    } finally {
+      setLoadingBeneficiaries(false);
     }
   };
 
@@ -821,6 +859,20 @@ export default function ClientesPage() {
                 )}
               </div>
 
+              {/* Ver Beneficiarios Button */}
+              <div>
+                <button
+                  onClick={() => {
+                    loadClientBeneficiaries(selectedClient.id);
+                    setShowBeneficiariesModal(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
+                >
+                  <Building2 size={18} />
+                  <span className="font-semibold">Ver Beneficiarios</span>
+                </button>
+              </div>
+
               {/* Dates */}
               <div className="flex items-center justify-between text-sm text-slate-500 border-t border-slate-200 pt-4">
                 <div className="flex items-center gap-1">
@@ -895,6 +947,131 @@ export default function ClientesPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Beneficiaries Modal */}
+      {showBeneficiariesModal && selectedClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowBeneficiariesModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Beneficiarios</h2>
+                <p className="text-sm text-slate-500">
+                  {selectedClient.first_name} {selectedClient.last_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBeneficiariesModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {loadingBeneficiaries ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="animate-spin text-blue-600" size={32} />
+                  <span className="ml-3 text-slate-600">Cargando beneficiarios...</span>
+                </div>
+              ) : clientBeneficiaries.length === 0 ? (
+                <div className="text-center py-10">
+                  <Building2 className="mx-auto text-slate-300 mb-4" size={48} />
+                  <p className="text-slate-500">Este cliente no tiene beneficiarios registrados</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {clientBeneficiaries.map((beneficiary) => (
+                    <div
+                      key={beneficiary.id}
+                      className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
+                            {beneficiary.account_holder?.[0] || 'B'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800 text-lg">
+                              {beneficiary.account_holder}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              {beneficiary.bank_platform?.name || 'Banco no especificado'}
+                            </p>
+                          </div>
+                        </div>
+                        {beneficiary.is_active ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 size={12} />
+                            Activo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                            Inactivo
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Account Number */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <CreditCard size={14} />
+                            <span className="text-xs font-medium">Número de Cuenta</span>
+                          </div>
+                          <p className="font-mono font-bold text-blue-600">
+                            {beneficiary.account_number}
+                          </p>
+                        </div>
+
+                        {/* Document */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <CreditCard size={14} />
+                            <span className="text-xs font-medium">Documento</span>
+                          </div>
+                          <p className="font-medium text-slate-700">
+                            {beneficiary.document_type} {beneficiary.document_number || 'N/A'}
+                          </p>
+                        </div>
+
+                        {/* Bank Country */}
+                        {beneficiary.bank_platform?.country && (
+                          <div className="bg-white rounded-lg p-3 border border-slate-200">
+                            <div className="flex items-center gap-2 text-slate-500 mb-1">
+                              <MapPin size={14} />
+                              <span className="text-xs font-medium">País del Banco</span>
+                            </div>
+                            <p className="font-medium text-slate-700">
+                              {beneficiary.bank_platform.country}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Created Date */}
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <Calendar size={14} />
+                            <span className="text-xs font-medium">Fecha de Registro</span>
+                          </div>
+                          <p className="font-medium text-slate-700">
+                            {formatDate(beneficiary.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
