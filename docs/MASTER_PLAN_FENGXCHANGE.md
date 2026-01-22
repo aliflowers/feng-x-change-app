@@ -18,7 +18,7 @@ Construir una plataforma Fintech automatizada, segura y escalable para el cambio
 > 2. **PWA Instalable:** La aplicación debe ser instalable como app nativa desde el navegador (manifest.json, service worker, iconos).
 
 ### Tech Stack
-*   **Frontend:** Next.js 15+ (App Router).
+*   **Frontend & Backend:** Next.js 15+ (App Router + Server Actions / API Routes).
     *   **DX Tool:** `click-to-react-component-next` (Inspección de código desde el navegador).
     *   **Landing Page:** Ruta `/`.
     *   **Panel Cliente:** Ruta `/app`.
@@ -43,12 +43,12 @@ Construir una plataforma Fintech automatizada, segura y escalable para el cambio
         *   Contenedores: bordes redondeados, `box-shadow` suave.
         *   Iconos sociales: circulares con colores de marca.
     *   **Framework CSS:** Tailwind CSS + ShadcnUI.
-*   **Backend:** NestJS + TypeScript.
+*   **Backend Logic:** Next.js API Routes + Server Actions (BaaS Pattern).
 *   **Base de Datos:** Supabase (PostgreSQL 16).
 *   **Auth:** Supabase Auth.
 *   **Storage:** Supabase Storage.
 *   **Integraciones:** WhatsApp Business API, OpenAI API.
-*   **Infraestructura:** Railway + Supabase.
+*   **Infraestructura:** Railway (Next.js Container) + Supabase (Managed DB).
 *   **Gestor de Paquetes:** pnpm (workspaces para monorepo).
 
 ### Arquitectura Escalable (Preparación para App Nativa)
@@ -59,12 +59,12 @@ Construir una plataforma Fintech automatizada, segura y escalable para el cambio
 ```
 fengxchange/
 ├── apps/
-│   ├── web/              ← Next.js (actual)
+│   ├── web/              ← Next.js (Frontend + Backend BFF)
 │   └── mobile/           ← React Native (futuro)
 ├── packages/
 │   └── shared/           ← CÓDIGO COMPARTIDO
 │       ├── types/        ← Interfaces TypeScript
-│       ├── services/     ← API calls (AuthService, TransactionService...)
+│       ├── services/     ← Shared Business Logic
 │       ├── hooks/        ← Lógica reutilizable
 │       ├── utils/        ← Funciones helper
 │       └── validators/   ← Schemas Zod
@@ -80,11 +80,11 @@ graph TD
     Auth -->|CLIENT| ClientUI["/app"]
     Auth -->|CAJERO/ADMIN| PanelUI["/panel"]
     Auth -->|SUPER_ADMIN| AdminUI["/admin"]
-    ClientUI --> Backend[NestJS API]
-    PanelUI --> Backend
-    AdminUI --> Backend
-    Backend --> DB[(Supabase)]
-    Backend --> WhatsApp
+    ClientUI --> NextAPI[Next.js API / Server Actions]
+    PanelUI --> NextAPI
+    AdminUI --> NextAPI
+    NextAPI --> DB[(Supabase)]
+    NextAPI --> WhatsApp
 ```
 
 ---

@@ -22,44 +22,44 @@
 ## Fase 1: Fundamentos (Semanas 1-4)
 
 ### Semana 1-2: Setup Técnico
-- [ ] Inicializar Monorepo con Turborepo.
-- [ ] Configurar `apps/web` (Next.js 14).
-- [ ] Configurar `apps/api` (NestJS).
-- [ ] Crear proyecto Supabase.
+- [x] Inicializar Monorepo con Turborepo.
+- [x] Configurar `apps/web` (Next.js 14+).
+- [ ] Configurar `apps/api` (NestJS). <!-- ⚠️ MISSING: Directory apps/api not found -->
+- [x] Crear proyecto Supabase.
 - [ ] Configurar Railway (staging).
 
 ### Semana 2-3: Design System y Landing
-- [ ] Configurar Tailwind CSS.
-- [ ] Implementar paleta de colores (`#AB2820`, `#05294F`, etc.).
-- [ ] Instalar fuente Montserrat.
-- [ ] Clonar Landing Page de `fengxchange.com`.
+- [x] Configurar Tailwind CSS.
+- [x] Implementar paleta de colores (`#AB2820`, `#05294F`, etc.).
+- [x] Instalar fuente Montserrat.
+- [x] Clonar Landing Page de `fengxchange.com`.
 - [ ] Implementar SEO (sitemap, robots, meta tags).
 - [ ] Widget de Chatbot (placeholder).
 
 ### Semana 3-4: Auth y BD Base
-- [ ] Configurar Supabase Auth.
-- [ ] Crear tabla `profiles` con roles.
-- [ ] Crear tabla `currencies`.
-- [ ] Crear tabla `exchange_rates`.
-- [ ] Implementar 4 interfaces por rol (`/app`, `/panel`, `/admin`).
-- [ ] Flujo de login/registro.
-- [ ] Campo "Código de Agente" en registro.
+- [x] Configurar Supabase Auth.
+- [x] Crear tabla `profiles` con roles.
+- [x] Crear tabla `currencies`.
+- [x] Crear tabla `exchange_rates`.
+- [/] Implementar 4 interfaces por rol (`/app` [x], `/panel` [ ], `/admin` [ ]). <!-- Partial: Client done, Admin/Panel skeletal -->
+- [/] Flujo de login/registro.
+- [x] Campo "Código de Agente" en registro.
 
 ---
 
 ## Fase 2: Core de Operaciones (Semanas 5-8)
 
 ### Semana 5-6: Pool de Operaciones
-- [ ] Crear tabla `transactions`.
-- [ ] Crear tabla `banks_platforms`.
-- [ ] Implementar creación de operación (cliente).
+- [x] Crear tabla `transactions`.
+- [x] Crear tabla `banks_platforms`.
+- [x] Implementar creación de operación (cliente).
 - [ ] Implementar Pool de Operaciones (vista tabla).
 - [ ] Filtros del Pool.
 - [ ] Vista previa de comprobantes.
 
 ### Semana 6-7: Tomar Operación y Timer
 - [ ] Botón "Tomar Operación".
-- [ ] Campos `taken_by` y `taken_at`.
+- [x] Campos `taken_by` y `taken_at` (DB).
 - [ ] Implementar Timer de 15 minutos.
 - [ ] Exención del timer para Super Admin.
 - [ ] Lógica de expiración (volver al pool).
@@ -68,19 +68,19 @@
 - [ ] Modal de subida de comprobante de pago.
 - [ ] Campos de referencia y banco.
 - [ ] Cambio de estado a COMPLETED.
-- [ ] Crear tabla `delayed_payments`.
-- [ ] Generación de Código de Agente.
-- [ ] Asociación cliente-agente.
-- [ ] RLS para protección de clientes.
+- [x] Crear tabla `delayed_payments`.
+- [x] Generación de Código de Agente.
+- [x] Asociación cliente-agente.
+- [x] RLS para protección de clientes.
 
 ---
 
 ## Fase 3: Comisiones e Historial (Semanas 9-10)
 
 ### Semana 9: Sistema de Comisiones
-- [ ] Crear tabla `commissions`.
+- [x] Crear tabla `commissions`.
 - [ ] Cálculo automático al completar operación (50%).
-- [ ] Crear tabla `commission_history`.
+- [x] Crear tabla `commission_history`.
 - [ ] Módulo Comisiones (Super Admin: ver todos).
 - [ ] Módulo Comisiones (Agente: ver propias).
 
@@ -99,10 +99,10 @@
 - [ ] Dashboard Super Admin con métricas.
 - [ ] Gráficos: operaciones por día, distribución por moneda.
 - [ ] Filtros temporales (día/semana/mes/año/rango).
-- [ ] Dashboard Cliente (historial personal).
+- [/] Dashboard Cliente (historial personal).
 
 ### Semana 12: Motor de Ganancias
-- [ ] Crear tabla `profit_config`.
+- [x] Crear tabla `profit_config`.
 - [ ] Configuración de tasas USDT (compra/venta).
 - [ ] Simulador de % de ganancia deseado.
 - [ ] Cálculo automático de tasa para clientes.
