@@ -266,11 +266,20 @@ export default function ProfilePage() {
         })
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
       setMessage({ type: 'success', text: '¡Perfil actualizado correctamente!' });
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      setMessage({ type: 'error', text: error.message || 'Error al actualizar el perfil' });
+      const errorMessage = error.message || error.details || 'Error al actualizar el perfil';
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
     }
@@ -324,17 +333,6 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
         <p className="text-gray-500">Administra tu información personal y configuración de cuenta.</p>
       </div>
-
-      {/* Mensaje de estado */}
-      {message && (
-        <div className={`flex items-center gap-3 p-4 rounded-xl ${message.type === 'success'
-          ? 'bg-green-50 text-green-800 border border-green-200'
-          : 'bg-red-50 text-red-800 border border-red-200'
-          }`}>
-          {message.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-          <span className="font-medium">{message.text}</span>
-        </div>
-      )}
 
       {/* Formulario de Datos Personales */}
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -544,25 +542,38 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Botón Guardar */}
+          {/* Botón Guardar y Mensaje */}
           <div className="pt-4">
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-primary w-full md:w-auto"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="animate-spin mr-2" size={20} />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Save size={20} className="mr-2" />
-                  Guardar Cambios
-                </>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn-primary w-full md:w-auto"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={20} />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} className="mr-2" />
+                    Guardar Cambios
+                  </>
+                )}
+              </button>
+
+              {/* Mensaje de estado */}
+              {message && (
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg animate-in fade-in slide-in-from-left-2 ${message.type === 'success'
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                  {message.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                  <span className="text-sm font-medium">{message.text}</span>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </form>
