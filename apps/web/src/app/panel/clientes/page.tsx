@@ -337,10 +337,6 @@ export default function ClientesPage() {
     });
   };
 
-  const formatAmount = (amount: number, symbol: string) => {
-    return `${symbol} ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-  };
-
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { label: string; color: string; bg: string }> = {
       POOL: { label: 'En Pool', color: 'text-blue-600', bg: 'bg-blue-100' },

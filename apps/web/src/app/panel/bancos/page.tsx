@@ -1,0 +1,809 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase/client';
+import {
+ Building2,
+ CreditCard,
+ RefreshCw,
+ Search,
+ Filter,
+ Plus,
+ Edit2,
+ Trash2,
+ X,
+ Save,
+ Loader2,
+ Check,
+ DollarSign,
+ AlertCircle,
+ CheckCircle2,
+ ChevronLeft,
+ ChevronRight
+} from 'lucide-react';
+
+interface BankPlatform {
+ id: number;
+ name: string;
+ type: 'BANK' | 'PLATFORM';
+ currency_id: number;
+ account_number: string;
+ account_holder: string;
+ current_balance: number;
+ is_active: boolean;
+ bank_code: string | null;
+ created_at: string;
+ updated_at: string;
+ currency?: {
+  id: number;
+  code: string;
+  symbol: string;
+  name: string;
+ };
+}
+
+interface Currency {
+ id: number;
+ code: string;
+ symbol: string;
+ name: string;
+}
+
+const ITEMS_PER_PAGE = 20;
+
+export default function BancosPage() {
+ const [banks, setBanks] = useState<BankPlatform[]>([]);
+ const [currencies, setCurrencies] = useState<Currency[]>([]);
+ const [loading, setLoading] = useState(true);
+ const [refreshing, setRefreshing] = useState(false);
+
+ // Pagination
+ const [currentPage, setCurrentPage] = useState(1);
+ const [totalCount, setTotalCount] = useState(0);
+ const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+ // Filters
+ const [showFilters, setShowFilters] = useState(false);
+ const [searchQuery, setSearchQuery] = useState('');
+ const [typeFilter, setTypeFilter] = useState('');
+ const [currencyFilter, setCurrencyFilter] = useState('');
+ const [activeFilter, setActiveFilter] = useState('');
+
+ // Modal states
+ const [showModal, setShowModal] = useState(false);
+ const [editingBank, setEditingBank] = useState<BankPlatform | null>(null);
+ const [saving, setSaving] = useState(false);
+ const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+ // Form data
+ const [formData, setFormData] = useState({
+  name: '',
+  type: 'BANK' as 'BANK' | 'PLATFORM',
+  currency_id: '',
+  account_number: '',
+  account_holder: '',
+  current_balance: '',
+  bank_code: '',
+  is_active: true
+ });
+
+ useEffect(() => {
+  loadInitialData();
+ }, []);
+
+ useEffect(() => {
+  loadBanks();
+ }, [currentPage, searchQuery, typeFilter, currencyFilter, activeFilter]);
+
+ const loadInitialData = async () => {
+  try {
+   // Load currencies
+   const { data: currenciesData } = await supabase
+    .from('currencies')
+    .select('id, code, symbol, name')
+    .order('code');
+
+   if (currenciesData) setCurrencies(currenciesData);
+
+   await loadBanks();
+  } catch (error) {
+   console.error('Error loading initial data:', error);
+  }
+ };
+
+ const loadBanks = useCallback(async () => {
+  setLoading(true);
+  try {
+   let query = supabase
+    .from('banks_platforms')
+    .select(`
+          id,
+          name,
+          type,
+          currency_id,
+          account_number,
+          account_holder,
+          current_balance,
+          is_active,
+          bank_code,
+          created_at,
+          updated_at,
+          currency:currencies(id, code, symbol, name)
+        `, { count: 'exact' });
+
+   // Apply filters
+   if (typeFilter) {
+    query = query.eq('type', typeFilter);
+   }
+
+   if (currencyFilter) {
+    query = query.eq('currency_id', parseInt(currencyFilter));
+   }
+
+   if (activeFilter === 'active') {
+    query = query.eq('is_active', true);
+   } else if (activeFilter === 'inactive') {
+    query = query.eq('is_active', false);
+   }
+
+   // Pagination
+   const from = (currentPage - 1) * ITEMS_PER_PAGE;
+   const to = from + ITEMS_PER_PAGE - 1;
+
+   query = query
+    .order('name')
+    .range(from, to);
+
+   const { data, count, error } = await query;
+
+   if (error) throw error;
+
+   // Transform data
+   let transformed = (data || []).map(bank => ({
+    ...bank,
+    currency: Array.isArray(bank.currency) ? bank.currency[0] : bank.currency,
+   }));
+
+   // Client-side search filter
+   if (searchQuery.trim()) {
+    const search = searchQuery.toLowerCase();
+    transformed = transformed.filter(b =>
+     b.name?.toLowerCase().includes(search) ||
+     b.account_number?.toLowerCase().includes(search) ||
+     b.account_holder?.toLowerCase().includes(search) ||
+     b.bank_code?.toLowerCase().includes(search)
+    );
+   }
+
+   setBanks(transformed as BankPlatform[]);
+   setTotalCount(count || 0);
+  } catch (error) {
+   console.error('Error loading banks:', error);
+  } finally {
+   setLoading(false);
+  }
+ }, [currentPage, searchQuery, typeFilter, currencyFilter, activeFilter]);
+
+ const handleRefresh = async () => {
+  setRefreshing(true);
+  await loadBanks();
+  setRefreshing(false);
+ };
+
+ const clearFilters = () => {
+  setSearchQuery('');
+  setTypeFilter('');
+  setCurrencyFilter('');
+  setActiveFilter('');
+  setCurrentPage(1);
+ };
+
+ const hasActiveFilters = searchQuery || typeFilter || currencyFilter || activeFilter;
+
+ const openCreateModal = () => {
+  setEditingBank(null);
+  setFormData({
+   name: '',
+   type: 'BANK',
+   currency_id: '',
+   account_number: '',
+   account_holder: '',
+   current_balance: '',
+   bank_code: '',
+   is_active: true
+  });
+  setMessage(null);
+  setShowModal(true);
+ };
+
+ const openEditModal = (bank: BankPlatform) => {
+  setEditingBank(bank);
+  setFormData({
+   name: bank.name,
+   type: bank.type,
+   currency_id: bank.currency_id.toString(),
+   account_number: bank.account_number,
+   account_holder: bank.account_holder,
+   current_balance: bank.current_balance.toString(),
+   bank_code: bank.bank_code || '',
+   is_active: bank.is_active
+  });
+  setMessage(null);
+  setShowModal(true);
+ };
+
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setSaving(true);
+  setMessage(null);
+
+  try {
+   const bankData = {
+    name: formData.name,
+    type: formData.type,
+    currency_id: parseInt(formData.currency_id),
+    account_number: formData.account_number,
+    account_holder: formData.account_holder,
+    current_balance: parseFloat(formData.current_balance) || 0,
+    bank_code: formData.bank_code || null,
+    is_active: formData.is_active,
+    updated_at: new Date().toISOString()
+   };
+
+   if (editingBank) {
+    // Update
+    const { error } = await supabase
+     .from('banks_platforms')
+     .update(bankData)
+     .eq('id', editingBank.id);
+
+    if (error) throw error;
+    setMessage({ type: 'success', text: '¡Banco/Plataforma actualizado correctamente!' });
+   } else {
+    // Create
+    const { error } = await supabase
+     .from('banks_platforms')
+     .insert(bankData);
+
+    if (error) throw error;
+    setMessage({ type: 'success', text: '¡Banco/Plataforma creado correctamente!' });
+   }
+
+   await loadBanks();
+   setTimeout(() => setShowModal(false), 1500);
+  } catch (error: any) {
+   console.error('Error saving bank:', error);
+   setMessage({ type: 'error', text: error.message || 'Error al guardar' });
+  } finally {
+   setSaving(false);
+  }
+ };
+
+ const toggleActive = async (bank: BankPlatform) => {
+  try {
+   const { error } = await supabase
+    .from('banks_platforms')
+    .update({ is_active: !bank.is_active, updated_at: new Date().toISOString() })
+    .eq('id', bank.id);
+
+   if (error) throw error;
+   await loadBanks();
+  } catch (error) {
+   console.error('Error toggling active:', error);
+  }
+ };
+
+ const updateBalance = async (bankId: number, newBalance: number) => {
+  try {
+   const { error } = await supabase
+    .from('banks_platforms')
+    .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+    .eq('id', bankId);
+
+   if (error) throw error;
+   await loadBanks();
+  } catch (error) {
+   console.error('Error updating balance:', error);
+  }
+ };
+
+ const formatCurrency = (amount: number, symbol?: string) => {
+  return `${symbol || ''} ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+ };
+
+ return (
+  <div className="space-y-6">
+   {/* Header */}
+   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+      <Building2 className="text-blue-600" size={28} />
+      Bancos y Plataformas
+     </h1>
+     <p className="text-slate-500 mt-1">
+      Cuentas bancarias y plataformas de la empresa ({totalCount} registros)
+     </p>
+    </div>
+    <div className="flex items-center gap-2">
+     <button
+      onClick={openCreateModal}
+      className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md"
+     >
+      <Plus size={18} />
+      Nuevo
+     </button>
+     <button
+      onClick={() => setShowFilters(!showFilters)}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFilters || hasActiveFilters
+        ? 'bg-blue-600 text-white'
+        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+       }`}
+     >
+      <Filter size={18} />
+      Filtros
+      {hasActiveFilters && (
+       <span className="bg-white text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold">
+        {[searchQuery, typeFilter, currencyFilter, activeFilter].filter(Boolean).length}
+       </span>
+      )}
+     </button>
+     <button
+      onClick={handleRefresh}
+      disabled={refreshing}
+      className="flex items-center gap-2 bg-white text-slate-700 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50"
+     >
+      <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+      Actualizar
+     </button>
+    </div>
+   </div>
+
+   {/* Filters Panel */}
+   {showFilters && (
+    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+     <div className="flex items-center justify-between mb-4">
+      <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+       <Filter size={18} className="text-blue-600" />
+       Filtros
+      </h3>
+      {hasActiveFilters && (
+       <button
+        onClick={clearFilters}
+        className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
+       >
+        <X size={14} />
+        Limpiar filtros
+       </button>
+      )}
+     </div>
+
+     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Search */}
+      <div>
+       <label className="block text-sm font-medium text-slate-600 mb-1">
+        <Search size={14} className="inline mr-1" />
+        Buscar
+       </label>
+       <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+        placeholder="Nombre, cuenta, titular..."
+        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+       />
+      </div>
+
+      {/* Type Filter */}
+      <div>
+       <label className="block text-sm font-medium text-slate-600 mb-1">
+        <Building2 size={14} className="inline mr-1" />
+        Tipo
+       </label>
+       <select
+        value={typeFilter}
+        onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
+        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+       >
+        <option value="">Todos</option>
+        <option value="BANK">Banco</option>
+        <option value="PLATFORM">Plataforma</option>
+       </select>
+      </div>
+
+      {/* Currency Filter */}
+      <div>
+       <label className="block text-sm font-medium text-slate-600 mb-1">
+        <DollarSign size={14} className="inline mr-1" />
+        Moneda
+       </label>
+       <select
+        value={currencyFilter}
+        onChange={(e) => { setCurrencyFilter(e.target.value); setCurrentPage(1); }}
+        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+       >
+        <option value="">Todas</option>
+        {currencies.map(c => (
+         <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
+        ))}
+       </select>
+      </div>
+
+      {/* Active Filter */}
+      <div>
+       <label className="block text-sm font-medium text-slate-600 mb-1">
+        <Check size={14} className="inline mr-1" />
+        Estado
+       </label>
+       <select
+        value={activeFilter}
+        onChange={(e) => { setActiveFilter(e.target.value); setCurrentPage(1); }}
+        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+       >
+        <option value="">Todos</option>
+        <option value="active">Activos</option>
+        <option value="inactive">Inactivos</option>
+       </select>
+      </div>
+     </div>
+    </div>
+   )}
+
+   {/* Banks Table */}
+   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    {loading ? (
+     <div className="flex items-center justify-center py-20">
+      <Loader2 className="animate-spin text-blue-600" size={32} />
+      <span className="ml-3 text-slate-600">Cargando bancos...</span>
+     </div>
+    ) : banks.length === 0 ? (
+     <div className="text-center py-20">
+      <Building2 className="mx-auto text-slate-300 mb-4" size={48} />
+      <p className="text-slate-500">No se encontraron bancos/plataformas</p>
+      {hasActiveFilters && (
+       <button
+        onClick={clearFilters}
+        className="mt-4 text-blue-600 hover:text-blue-800 text-sm"
+       >
+        Limpiar filtros
+       </button>
+      )}
+     </div>
+    ) : (
+     <div className="overflow-x-auto">
+      <table className="w-full">
+       <thead className="bg-slate-50 border-b border-slate-200">
+        <tr>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Banco/Plataforma
+         </th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Tipo
+         </th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Cuenta
+         </th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Titular
+         </th>
+         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Moneda
+         </th>
+         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Saldo
+         </th>
+         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Estado
+         </th>
+         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          Acciones
+         </th>
+        </tr>
+       </thead>
+       <tbody className="divide-y divide-slate-100">
+        {banks.map((bank) => (
+         <tr key={bank.id} className="hover:bg-slate-50 transition-colors">
+          <td className="px-4 py-3">
+           <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${bank.type === 'BANK'
+              ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+              : 'bg-gradient-to-br from-purple-500 to-pink-600'
+             } text-white font-bold`}>
+             {bank.name.substring(0, 2).toUpperCase()}
+            </div>
+            <div>
+             <p className="font-medium text-slate-800">{bank.name}</p>
+             {bank.bank_code && (
+              <p className="text-xs text-slate-500 font-mono">{bank.bank_code}</p>
+             )}
+            </div>
+           </div>
+          </td>
+          <td className="px-4 py-3">
+           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${bank.type === 'BANK'
+             ? 'bg-blue-100 text-blue-700'
+             : 'bg-purple-100 text-purple-700'
+            }`}>
+            {bank.type === 'BANK' ? 'Banco' : 'Plataforma'}
+           </span>
+          </td>
+          <td className="px-4 py-3">
+           <p className="font-mono text-sm text-slate-700">{bank.account_number}</p>
+          </td>
+          <td className="px-4 py-3">
+           <p className="text-sm text-slate-700">{bank.account_holder}</p>
+          </td>
+          <td className="px-4 py-3">
+           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+            {bank.currency?.code || 'N/A'}
+           </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+           <p className={`font-bold ${bank.current_balance > 0 ? 'text-green-600' : 'text-slate-600'}`}>
+            {formatCurrency(bank.current_balance, bank.currency?.symbol)}
+           </p>
+          </td>
+          <td className="px-4 py-3 text-center">
+           <button
+            onClick={() => toggleActive(bank)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${bank.is_active ? 'bg-green-500' : 'bg-slate-300'
+             }`}
+           >
+            <span
+             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${bank.is_active ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+           </button>
+          </td>
+          <td className="px-4 py-3">
+           <div className="flex items-center justify-center gap-1">
+            <button
+             onClick={() => openEditModal(bank)}
+             className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600"
+             title="Editar"
+            >
+             <Edit2 size={18} />
+            </button>
+           </div>
+          </td>
+         </tr>
+        ))}
+       </tbody>
+      </table>
+     </div>
+    )}
+
+    {/* Pagination */}
+    {totalPages > 1 && (
+     <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="text-sm text-slate-600">
+       Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} de {totalCount}
+      </div>
+      <div className="flex items-center gap-2">
+       <button
+        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+        disabled={currentPage === 1}
+        className="p-2 rounded-lg border border-slate-200 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+       >
+        <ChevronLeft size={18} />
+       </button>
+       <div className="flex items-center gap-1">
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+         let page;
+         if (totalPages <= 5) {
+          page = i + 1;
+         } else if (currentPage <= 3) {
+          page = i + 1;
+         } else if (currentPage >= totalPages - 2) {
+          page = totalPages - 4 + i;
+         } else {
+          page = currentPage - 2 + i;
+         }
+         return (
+          <button
+           key={page}
+           onClick={() => setCurrentPage(page)}
+           className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === page
+             ? 'bg-blue-600 text-white'
+             : 'hover:bg-white border border-slate-200'
+            }`}
+          >
+           {page}
+          </button>
+         );
+        })}
+       </div>
+       <button
+        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+        disabled={currentPage === totalPages}
+        className="p-2 rounded-lg border border-slate-200 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+       >
+        <ChevronRight size={18} />
+       </button>
+      </div>
+     </div>
+    )}
+   </div>
+
+   {/* Create/Edit Modal */}
+   {showModal && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+     <div
+      className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      onClick={() => setShowModal(false)}
+     />
+     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto">
+      {/* Modal Header */}
+      <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between z-10">
+       <h2 className="text-lg font-bold text-slate-800">
+        {editingBank ? 'Editar Banco/Plataforma' : 'Nuevo Banco/Plataforma'}
+       </h2>
+       <button
+        onClick={() => setShowModal(false)}
+        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+       >
+        <X size={20} className="text-slate-500" />
+       </button>
+      </div>
+
+      {/* Modal Content */}
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+       {/* Name */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Nombre *
+        </label>
+        <input
+         type="text"
+         value={formData.name}
+         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         placeholder="Banco de Venezuela"
+         required
+        />
+       </div>
+
+       {/* Type */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Tipo *
+        </label>
+        <select
+         value={formData.type}
+         onChange={(e) => setFormData({ ...formData, type: e.target.value as 'BANK' | 'PLATFORM' })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         required
+        >
+         <option value="BANK">Banco</option>
+         <option value="PLATFORM">Plataforma</option>
+        </select>
+       </div>
+
+       {/* Currency */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Moneda *
+        </label>
+        <select
+         value={formData.currency_id}
+         onChange={(e) => setFormData({ ...formData, currency_id: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         required
+        >
+         <option value="">Seleccionar moneda</option>
+         {currencies.map(c => (
+          <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
+         ))}
+        </select>
+       </div>
+
+       {/* Account Number */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Número de Cuenta *
+        </label>
+        <input
+         type="text"
+         value={formData.account_number}
+         onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         placeholder="0102-1234-5678-9012"
+         required
+        />
+       </div>
+
+       {/* Account Holder */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Titular de la Cuenta *
+        </label>
+        <input
+         type="text"
+         value={formData.account_holder}
+         onChange={(e) => setFormData({ ...formData, account_holder: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         placeholder="FENGXCHANGE C.A."
+         required
+        />
+       </div>
+
+       {/* Bank Code */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Código del Banco
+        </label>
+        <input
+         type="text"
+         value={formData.bank_code}
+         onChange={(e) => setFormData({ ...formData, bank_code: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         placeholder="0102"
+        />
+       </div>
+
+       {/* Current Balance */}
+       <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+         Saldo Actual
+        </label>
+        <input
+         type="number"
+         step="0.01"
+         value={formData.current_balance}
+         onChange={(e) => setFormData({ ...formData, current_balance: e.target.value })}
+         className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+         placeholder="0.00"
+        />
+       </div>
+
+       {/* Active */}
+       <div className="flex items-center gap-3">
+        <label className="relative inline-flex items-center cursor-pointer">
+         <input
+          type="checkbox"
+          checked={formData.is_active}
+          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+          className="sr-only peer"
+         />
+         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+        <span className="text-sm font-medium text-slate-700">Activo</span>
+       </div>
+
+       {/* Message */}
+       {message && (
+        <div className={`flex items-center gap-2 p-3 rounded-lg ${message.type === 'success'
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
+         }`}>
+         {message.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+         <span className="text-sm font-medium">{message.text}</span>
+        </div>
+       )}
+
+       {/* Submit Button */}
+       <div className="pt-4">
+        <button
+         type="submit"
+         disabled={saving}
+         className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md disabled:opacity-50"
+        >
+         {saving ? (
+          <>
+           <Loader2 className="animate-spin" size={20} />
+           Guardando...
+          </>
+         ) : (
+          <>
+           <Save size={20} />
+           {editingBank ? 'Actualizar' : 'Crear'}
+          </>
+         )}
+        </button>
+       </div>
+      </form>
+     </div>
+    </div>
+   )}
+  </div>
+ );
+}
