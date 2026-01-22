@@ -858,21 +858,29 @@ export default function BancosPage() {
                 />
               </div>
 
-              {/* Bank Code - Only for BANK type */}
-              {formData.type === 'BANK' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Código del Banco
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.bank_code}
-                    onChange={(e) => setFormData({ ...formData, bank_code: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0102"
-                  />
-                </div>
-              )}
+              {/* Bank Code - Only for BANK type and currencies that use bank codes */}
+              {formData.type === 'BANK' && (() => {
+                const currency = currencies.find(c => c.id.toString() === formData.currency_id);
+                // Only show for countries that use bank codes in account numbers
+                const currenciesWithBankCode = ['VES', 'COP', 'PEN'];
+                if (currency && currenciesWithBankCode.includes(currency.code)) {
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Código del Banco
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.bank_code}
+                        onChange={(e) => setFormData({ ...formData, bank_code: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder={currency.code === 'VES' ? '0102' : currency.code === 'COP' ? '1007' : '002'}
+                      />
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Current Balance */}
               <div>
