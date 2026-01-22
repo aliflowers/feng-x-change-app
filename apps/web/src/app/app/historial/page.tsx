@@ -21,7 +21,8 @@ import {
   User,
   Calendar,
   FileText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Receipt
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -121,6 +122,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithDetails | null>(null);
+  const [modalType, setModalType] = useState<'details' | 'receipt'>('details');
 
   useEffect(() => {
     fetchTransactions();
@@ -248,8 +250,8 @@ export default function HistoryPage() {
             key={filter.value}
             onClick={() => setStatusFilter(filter.value)}
             className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${statusFilter === filter.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
           >
             {filter.label}
@@ -359,13 +361,31 @@ export default function HistoryPage() {
                         <p className="text-sm text-gray-600">{formatDate(tx.created_at)}</p>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedTransaction(tx)}
-                          className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Ver detalles"
-                        >
-                          <Eye size={18} />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Receipt Button for completed transactions */}
+                          {tx.status === 'COMPLETED' && tx.payment_proof_url && (
+                            <button
+                              onClick={() => {
+                                setModalType('receipt');
+                                setSelectedTransaction(tx);
+                              }}
+                              className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-800 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors text-sm font-medium"
+                            >
+                              <Receipt size={16} />
+                              Ver Pago
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setModalType('details');
+                              setSelectedTransaction(tx);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Ver detalles"
+                          >
+                            <Eye size={18} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -442,7 +462,9 @@ export default function HistoryPage() {
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Detalles de Operación</h2>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {modalType === 'receipt' ? 'Recibo de Pago' : 'Detalles de Operación'}
+                </h2>
                 <p className="text-sm text-gray-500">{selectedTransaction.transaction_number}</p>
               </div>
               <button
@@ -455,150 +477,210 @@ export default function HistoryPage() {
 
             {/* Content */}
             <div className="p-5 space-y-5">
-              {/* Status Badge */}
-              {(() => {
-                const statusConfig = getStatusConfig(selectedTransaction.status);
-                const StatusIcon = statusConfig.icon;
-                return (
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${statusConfig.bgColor} ${statusConfig.textColor} border ${statusConfig.borderColor}`}>
-                    <StatusIcon size={18} />
-                    <span className="font-semibold">{statusConfig.label}</span>
+              {modalType === 'receipt' ? (
+                /* Receipt Modal - Only payment proof from company */
+                <>
+                  {/* Status Badge */}
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-700 border border-green-300">
+                    <CheckCircle2 size={18} />
+                    <span className="font-semibold">Pago Completado</span>
                   </div>
-                );
-              })()}
 
-              {/* Amounts */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                <div className="flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
-                      <ArrowUpRight size={14} className="text-red-500" />
-                      Envías
-                    </p>
-                    <p className="text-xl font-bold text-red-600">
-                      {selectedTransaction.from_currency?.symbol} {selectedTransaction.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-sm text-gray-500">{selectedTransaction.from_currency?.code}</p>
-                  </div>
-                  <ChevronRight className="text-gray-300 mx-2" size={24} />
-                  <div className="text-center flex-1">
-                    <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
-                      <ArrowDownLeft size={14} className="text-green-500" />
-                      Recibe
-                    </p>
-                    <p className="text-xl font-bold text-green-600">
+                  {/* Amount Received */}
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+                    <p className="text-xs text-gray-500 mb-1 text-center">Monto Recibido</p>
+                    <p className="text-2xl font-bold text-green-600 text-center">
                       {selectedTransaction.to_currency?.symbol} {selectedTransaction.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                     </p>
-                    <p className="text-sm text-gray-500">{selectedTransaction.to_currency?.code}</p>
+                    <p className="text-sm text-gray-500 text-center">{selectedTransaction.to_currency?.code}</p>
                   </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-blue-200 text-center">
-                  <p className="text-xs text-gray-500">Tasa aplicada</p>
-                  <p className="font-bold text-gray-700">
-                    1 {selectedTransaction.from_currency?.code} = {selectedTransaction.exchange_rate_applied.toLocaleString('es-VE')} {selectedTransaction.to_currency?.code}
-                  </p>
-                </div>
-              </div>
 
-              {/* Beneficiary Info */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <User size={16} className="text-gray-400" />
-                  Beneficiario
-                </h3>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="font-bold text-gray-900">{selectedTransaction.user_bank_account?.account_holder || 'No especificado'}</p>
-                  <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
-                    <Building size={14} className="text-gray-400" />
-                    {selectedTransaction.user_bank_account?.bank_platform?.name || 'Banco no especificado'}
-                  </div>
-                  <p className="text-sm text-gray-500 font-mono mt-1">
-                    {selectedTransaction.user_bank_account?.account_number || 'Sin número de cuenta'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Dates */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Calendar size={16} className="text-gray-400" />
-                  Fechas
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Creada</p>
-                    <p className="font-medium text-gray-900 text-sm">{formatDate(selectedTransaction.created_at)}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Actualizada</p>
-                    <p className="font-medium text-gray-900 text-sm">{formatDate(selectedTransaction.updated_at)}</p>
-                  </div>
-                  {selectedTransaction.taken_at && (
-                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600">Tomada</p>
-                      <p className="font-medium text-blue-900 text-sm">{formatDate(selectedTransaction.taken_at)}</p>
+                  {/* Payment Reference */}
+                  {selectedTransaction.payment_reference && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <FileText size={16} className="text-gray-400" />
+                        Referencia de Pago
+                      </h3>
+                      <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                        <p className="font-mono font-bold text-green-700">{selectedTransaction.payment_reference}</p>
+                      </div>
                     </div>
                   )}
+
+                  {/* Payment Date */}
                   {selectedTransaction.paid_at && (
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                      <p className="text-xs text-green-600">Pagada</p>
-                      <p className="font-medium text-green-900 text-sm">{formatDate(selectedTransaction.paid_at)}</p>
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Calendar size={16} className="text-gray-400" />
+                        Fecha de Pago
+                      </h3>
+                      <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                        <p className="font-medium text-green-700">{formatDate(selectedTransaction.paid_at)}</p>
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Client Proof */}
-              {selectedTransaction.client_proof_url && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <ImageIcon size={16} className="text-gray-400" />
-                    Comprobante de Pago
-                  </h3>
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-                    {selectedTransaction.client_proof_url.split(',').map((url, index) => (
-                      <a
-                        key={index}
-                        href={url.trim()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <img
-                          src={url.trim()}
-                          alt={`Comprobante ${index + 1}`}
-                          className="w-full rounded-lg border border-gray-200 hover:opacity-90 transition-opacity mb-2 last:mb-0"
-                        />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  {/* Payment Proof Image */}
+                  {selectedTransaction.payment_proof_url && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Receipt size={16} className="text-green-500" />
+                        Comprobante de Pago
+                      </h3>
+                      <div className="bg-green-50 rounded-xl p-3 border border-green-200">
+                        <a
+                          href={selectedTransaction.payment_proof_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={selectedTransaction.payment_proof_url}
+                            alt="Recibo de pago"
+                            className="w-full rounded-lg border border-green-200 hover:opacity-90 transition-opacity"
+                          />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Details Modal - Full transaction details */
+                <>
+                  {/* Status Badge */}
+                  {(() => {
+                    const statusConfig = getStatusConfig(selectedTransaction.status);
+                    const StatusIcon = statusConfig.icon;
+                    return (
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${statusConfig.bgColor} ${statusConfig.textColor} border ${statusConfig.borderColor}`}>
+                        <StatusIcon size={18} />
+                        <span className="font-semibold">{statusConfig.label}</span>
+                      </div>
+                    );
+                  })()}
 
-              {/* Payment Reference */}
-              {selectedTransaction.payment_reference && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <FileText size={16} className="text-gray-400" />
-                    Referencia de Pago
-                  </h3>
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                    <p className="font-mono font-bold text-green-700">{selectedTransaction.payment_reference}</p>
+                  {/* Amounts */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                    <div className="flex items-center justify-between">
+                      <div className="text-center flex-1">
+                        <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
+                          <ArrowUpRight size={14} className="text-red-500" />
+                          Envías
+                        </p>
+                        <p className="text-xl font-bold text-red-600">
+                          {selectedTransaction.from_currency?.symbol} {selectedTransaction.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-sm text-gray-500">{selectedTransaction.from_currency?.code}</p>
+                      </div>
+                      <ChevronRight className="text-gray-300 mx-2" size={24} />
+                      <div className="text-center flex-1">
+                        <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
+                          <ArrowDownLeft size={14} className="text-green-500" />
+                          Recibe
+                        </p>
+                        <p className="text-xl font-bold text-green-600">
+                          {selectedTransaction.to_currency?.symbol} {selectedTransaction.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-sm text-gray-500">{selectedTransaction.to_currency?.code}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-blue-200 text-center">
+                      <p className="text-xs text-gray-500">Tasa aplicada</p>
+                      <p className="font-bold text-gray-700">
+                        1 {selectedTransaction.from_currency?.code} = {selectedTransaction.exchange_rate_applied.toLocaleString('es-VE')} {selectedTransaction.to_currency?.code}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* Admin Notes */}
-              {selectedTransaction.admin_notes && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <AlertCircle size={16} className="text-amber-500" />
-                    Notas del Administrador
-                  </h3>
-                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                    <p className="text-amber-800">{selectedTransaction.admin_notes}</p>
+                  {/* Beneficiary Info */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <User size={16} className="text-gray-400" />
+                      Beneficiario
+                    </h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                      <p className="font-bold text-gray-900">{selectedTransaction.user_bank_account?.account_holder || 'No especificado'}</p>
+                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
+                        <Building size={14} className="text-gray-400" />
+                        {selectedTransaction.user_bank_account?.bank_platform?.name || 'Banco no especificado'}
+                      </div>
+                      <p className="text-sm text-gray-500 font-mono mt-1">
+                        {selectedTransaction.user_bank_account?.account_number || 'Sin número de cuenta'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Dates */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <Calendar size={16} className="text-gray-400" />
+                      Fechas
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="text-xs text-gray-500">Creada</p>
+                        <p className="font-medium text-gray-900 text-sm">{formatDate(selectedTransaction.created_at)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="text-xs text-gray-500">Actualizada</p>
+                        <p className="font-medium text-gray-900 text-sm">{formatDate(selectedTransaction.updated_at)}</p>
+                      </div>
+                      {selectedTransaction.taken_at && (
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <p className="text-xs text-blue-600">Tomada</p>
+                          <p className="font-medium text-blue-900 text-sm">{formatDate(selectedTransaction.taken_at)}</p>
+                        </div>
+                      )}
+                      {selectedTransaction.paid_at && (
+                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                          <p className="text-xs text-green-600">Pagada</p>
+                          <p className="font-medium text-green-900 text-sm">{formatDate(selectedTransaction.paid_at)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Client Proof */}
+                  {selectedTransaction.client_proof_url && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <ImageIcon size={16} className="text-gray-400" />
+                        Tu Comprobante de Pago
+                      </h3>
+                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+                        {selectedTransaction.client_proof_url.split(',').map((url, index) => (
+                          <a
+                            key={index}
+                            href={url.trim()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            <img
+                              src={url.trim()}
+                              alt={`Comprobante ${index + 1}`}
+                              className="w-full rounded-lg border border-gray-200 hover:opacity-90 transition-opacity mb-2 last:mb-0"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Admin Notes */}
+                  {selectedTransaction.admin_notes && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <AlertCircle size={16} className="text-amber-500" />
+                        Notas del Administrador
+                      </h3>
+                      <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                        <p className="text-amber-800">{selectedTransaction.admin_notes}</p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
