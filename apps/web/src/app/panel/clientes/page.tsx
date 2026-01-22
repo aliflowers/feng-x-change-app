@@ -265,12 +265,20 @@ export default function ClientesPage() {
           document_number,
           is_active,
           created_at,
-          bank_platform:banks_platforms(id, name, country)
+          bank_platform:banks_platforms(id, name, type)
         `)
         .eq('user_id', clientId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
 
       // Transform data
       const transformed = (data || []).map(b => ({
@@ -281,6 +289,11 @@ export default function ClientesPage() {
       setClientBeneficiaries(transformed);
     } catch (error) {
       console.error('Error loading beneficiaries:', error);
+      if (error && typeof error === 'object') {
+        if ('message' in error) console.error('Error message:', (error as any).message);
+        if ('details' in error) console.error('Error details:', (error as any).details);
+        if ('hint' in error) console.error('Error hint:', (error as any).hint);
+      }
     } finally {
       setLoadingBeneficiaries(false);
     }
@@ -1046,15 +1059,15 @@ export default function ClientesPage() {
                           </p>
                         </div>
 
-                        {/* Bank Country */}
-                        {beneficiary.bank_platform?.country && (
+                        {/* Bank Type */}
+                        {beneficiary.bank_platform?.type && (
                           <div className="bg-white rounded-lg p-3 border border-slate-200">
                             <div className="flex items-center gap-2 text-slate-500 mb-1">
-                              <MapPin size={14} />
-                              <span className="text-xs font-medium">País del Banco</span>
+                              <Building2 size={14} />
+                              <span className="text-xs font-medium">Tipo</span>
                             </div>
                             <p className="font-medium text-slate-700">
-                              {beneficiary.bank_platform.country}
+                              {beneficiary.bank_platform.type}
                             </p>
                           </div>
                         )}
