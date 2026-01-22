@@ -9,6 +9,7 @@ import {
   Filter,
   Plus,
   Edit2,
+  Trash2,
   X,
   Save,
   Loader2,
@@ -125,9 +126,14 @@ export default function BancosPage() {
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingBank, setEditingBank] = useState<BankPlatform | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Selection states
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Form data
   const [formData, setFormData] = useState({
@@ -359,6 +365,51 @@ export default function BancosPage() {
     }
   };
 
+  // Selection functions
+  const toggleSelection = (id: number) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === banks.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(banks.map(b => b.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('banks_platforms')
+        .delete()
+        .in('id', Array.from(selectedIds));
+
+      if (error) throw error;
+
+      setShowDeleteModal(false);
+      clearSelection();
+      await loadBanks();
+    } catch (error) {
+      console.error('Error deleting banks:', error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const formatCurrency = (amount: number, symbol?: string) => {
     return `${symbol || ''} ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
   };
@@ -500,6 +551,36 @@ export default function BancosPage() {
         </div>
       )}
 
+      {/* Selection Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="bg-gradient-to-r from-red-500 to-rose-600 rounded-xl p-4 shadow-lg flex items-center justify-between">
+          <div className="flex items-center gap-3 text-white">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <Check size={20} />
+            </div>
+            <div>
+              <p className="font-bold">{selectedIds.size} {selectedIds.size === 1 ? 'cuenta seleccionada' : 'cuentas seleccionadas'}</p>
+              <p className="text-sm text-white/80">Selecciona más cuentas o elimina las seleccionadas</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={clearSelection}
+              className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors font-semibold"
+            >
+              <Trash2 size={18} />
+              Eliminar seleccionadas
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Banks Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
@@ -525,6 +606,14 @@ export default function BancosPage() {
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={banks.length > 0 && selectedIds.size === banks.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Banco/Plataforma
                   </th>
@@ -553,7 +642,15 @@ export default function BancosPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {banks.map((bank) => (
-                  <tr key={bank.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={bank.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.has(bank.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(bank.id)}
+                        onChange={() => toggleSelection(bank.id)}
+                        className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${bank.type === 'BANK'
@@ -943,6 +1040,55 @@ export default function BancosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDeleteModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="text-red-600" size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">
+                ¿Eliminar {selectedIds.size === 1 ? 'cuenta' : 'cuentas'}?
+              </h3>
+              <p className="text-slate-600 mb-6">
+                Estás a punto de eliminar <span className="font-bold text-red-600">{selectedIds.size}</span> {selectedIds.size === 1 ? 'cuenta bancaria/plataforma' : 'cuentas bancarias/plataformas'}.
+                Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={deleting}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl hover:from-red-600 hover:to-rose-700 transition-all font-medium disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={18} />
+                      Sí, eliminar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
