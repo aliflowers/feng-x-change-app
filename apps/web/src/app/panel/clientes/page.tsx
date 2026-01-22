@@ -919,7 +919,7 @@ export default function ClientesPage() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowHistoryModal(false)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between z-10">
               <div>
@@ -949,88 +949,80 @@ export default function ClientesPage() {
                   <p className="text-slate-500">Este cliente no tiene operaciones</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {clientTransactions.map((t) => {
-                    const statusConfig = getStatusConfig(t.status);
-                    return (
-                      <div
-                        key={t.id}
-                        className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200 hover:shadow-md transition-shadow"
-                      >
-                        {/* Header with number and status */}
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <p className="font-mono text-lg font-bold text-blue-600">
-                              {t.transaction_number}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              Creada: {formatDate(t.created_at)}
-                            </p>
-                          </div>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
-                            {statusConfig.label}
-                          </span>
-                        </div>
-
-                        {/* Amounts */}
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div className="bg-white rounded-lg p-3 border border-slate-200">
-                            <p className="text-xs text-slate-500 mb-1">Envía</p>
-                            <p className="text-lg font-bold text-slate-800">
-                              {t.from_currency?.symbol} {t.amount_sent?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                            </p>
-                            <p className="text-xs text-slate-500">{t.from_currency?.name || t.from_currency?.code}</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-3 border border-slate-200">
-                            <p className="text-xs text-slate-500 mb-1">Recibe</p>
-                            <p className="text-lg font-bold text-green-600">
-                              {t.to_currency?.symbol} {t.amount_received?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                            </p>
-                            <p className="text-xs text-slate-500">{t.to_currency?.name || t.to_currency?.code}</p>
-                          </div>
-                        </div>
-
-                        {/* Exchange Rate */}
-                        {t.exchange_rate_applied && (
-                          <div className="bg-amber-50 rounded-lg px-3 py-2 mb-4 border border-amber-200">
-                            <p className="text-xs text-amber-700">
-                              <span className="font-semibold">Tasa aplicada:</span> 1 {t.from_currency?.code} = {t.exchange_rate_applied?.toLocaleString('es-VE', { minimumFractionDigits: 4 })} {t.to_currency?.code}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Beneficiary info */}
-                        {t.user_bank_account && (
-                          <div className="bg-white rounded-lg p-3 border border-slate-200 mb-4">
-                            <p className="text-xs text-slate-500 mb-1">Beneficiario</p>
-                            <p className="font-medium text-slate-800">
-                              {t.user_bank_account.account_holder}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              {t.user_bank_account.bank_platform?.name || 'Banco'} • {t.user_bank_account.account_number}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Payment info */}
-                        {t.status === 'COMPLETED' && (
-                          <div className="flex items-center justify-between text-sm border-t border-slate-200 pt-3">
-                            {t.payment_reference && (
-                              <div>
-                                <span className="text-slate-500">Ref: </span>
-                                <span className="font-mono font-medium text-slate-700">{t.payment_reference}</span>
-                              </div>
-                            )}
-                            {t.paid_at && (
-                              <div className="text-slate-500">
-                                <span className="font-medium text-green-600">Pagado:</span> {formatDate(t.paid_at)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-100 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Nº Operación</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Envía</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Recibe</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Tasa</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Beneficiario</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Referencia</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Fecha</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-600">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {clientTransactions.map((t) => {
+                        const statusConfig = getStatusConfig(t.status);
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-3 py-3">
+                              <p className="font-mono font-bold text-blue-600">{t.transaction_number}</p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="font-semibold text-slate-800">
+                                {t.from_currency?.symbol} {t.amount_sent?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                              </p>
+                              <p className="text-xs text-slate-500">{t.from_currency?.code}</p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="font-semibold text-green-600">
+                                {t.to_currency?.symbol} {t.amount_received?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                              </p>
+                              <p className="text-xs text-slate-500">{t.to_currency?.code}</p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="text-slate-700">
+                                {t.exchange_rate_applied?.toLocaleString('es-VE', { minimumFractionDigits: 2 }) || '-'}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              {t.user_bank_account ? (
+                                <div>
+                                  <p className="font-medium text-slate-800 truncate max-w-[150px]">
+                                    {t.user_bank_account.account_holder}
+                                  </p>
+                                  <p className="text-xs text-slate-500 truncate max-w-[150px]">
+                                    {t.user_bank_account.bank_platform?.name || 'Banco'}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="font-mono text-xs text-slate-600">
+                                {t.payment_reference || '-'}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="text-slate-700">{formatDate(t.created_at)}</p>
+                              {t.paid_at && t.status === 'COMPLETED' && (
+                                <p className="text-xs text-green-600">Pagado: {formatDate(t.paid_at)}</p>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
+                                {statusConfig.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
