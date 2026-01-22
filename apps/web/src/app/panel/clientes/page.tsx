@@ -225,11 +225,18 @@ export default function ClientesPage() {
           transaction_number,
           amount_sent,
           amount_received,
+          exchange_rate_applied,
           status,
           created_at,
           paid_at,
-          from_currency:currencies!transactions_from_currency_id_fkey(code, symbol),
-          to_currency:currencies!transactions_to_currency_id_fkey(code, symbol)
+          payment_reference,
+          from_currency:currencies!transactions_from_currency_id_fkey(code, symbol, name),
+          to_currency:currencies!transactions_to_currency_id_fkey(code, symbol, name),
+          user_bank_account:user_bank_accounts!transactions_user_bank_account_id_fkey(
+            account_holder,
+            account_number,
+            bank_platform:banks_platforms(name, type)
+          )
         `)
         .eq('user_id', clientId)
         .order('created_at', { ascending: false })
@@ -238,11 +245,18 @@ export default function ClientesPage() {
       if (error) throw error;
 
       // Transform data
-      const transformed = (data || []).map(t => ({
-        ...t,
-        from_currency: Array.isArray(t.from_currency) ? t.from_currency[0] : t.from_currency,
-        to_currency: Array.isArray(t.to_currency) ? t.to_currency[0] : t.to_currency,
-      }));
+      const transformed = (data || []).map(t => {
+        const userBankAccount = Array.isArray(t.user_bank_account) ? t.user_bank_account[0] : t.user_bank_account;
+        return {
+          ...t,
+          from_currency: Array.isArray(t.from_currency) ? t.from_currency[0] : t.from_currency,
+          to_currency: Array.isArray(t.to_currency) ? t.to_currency[0] : t.to_currency,
+          user_bank_account: userBankAccount ? {
+            ...userBankAccount,
+            bank_platform: Array.isArray(userBankAccount.bank_platform) ? userBankAccount.bank_platform[0] : userBankAccount.bank_platform
+          } : null
+        };
+      });
 
       setClientTransactions(transformed);
     } catch (error) {
@@ -935,28 +949,85 @@ export default function ClientesPage() {
                   <p className="text-slate-500">Este cliente no tiene operaciones</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {clientTransactions.map((t) => {
                     const statusConfig = getStatusConfig(t.status);
                     return (
                       <div
                         key={t.id}
-                        className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200"
+                        className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200 hover:shadow-md transition-shadow"
                       >
-                        <div>
-                          <p className="font-mono text-sm font-bold text-slate-800">
-                            {t.transaction_number}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {formatAmount(t.amount_sent, t.from_currency?.symbol || '')} → {formatAmount(t.amount_received, t.to_currency?.symbol || '')}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {formatDate(t.created_at)}
-                          </p>
+                        {/* Header with number and status */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <p className="font-mono text-lg font-bold text-blue-600">
+                              {t.transaction_number}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Creada: {formatDate(t.created_at)}
+                            </p>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
+                            {statusConfig.label}
+                          </span>
                         </div>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
-                          {statusConfig.label}
-                        </span>
+
+                        {/* Amounts */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div className="bg-white rounded-lg p-3 border border-slate-200">
+                            <p className="text-xs text-slate-500 mb-1">Envía</p>
+                            <p className="text-lg font-bold text-slate-800">
+                              {t.from_currency?.symbol} {t.amount_sent?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            </p>
+                            <p className="text-xs text-slate-500">{t.from_currency?.name || t.from_currency?.code}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 border border-slate-200">
+                            <p className="text-xs text-slate-500 mb-1">Recibe</p>
+                            <p className="text-lg font-bold text-green-600">
+                              {t.to_currency?.symbol} {t.amount_received?.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            </p>
+                            <p className="text-xs text-slate-500">{t.to_currency?.name || t.to_currency?.code}</p>
+                          </div>
+                        </div>
+
+                        {/* Exchange Rate */}
+                        {t.exchange_rate_applied && (
+                          <div className="bg-amber-50 rounded-lg px-3 py-2 mb-4 border border-amber-200">
+                            <p className="text-xs text-amber-700">
+                              <span className="font-semibold">Tasa aplicada:</span> 1 {t.from_currency?.code} = {t.exchange_rate_applied?.toLocaleString('es-VE', { minimumFractionDigits: 4 })} {t.to_currency?.code}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Beneficiary info */}
+                        {t.user_bank_account && (
+                          <div className="bg-white rounded-lg p-3 border border-slate-200 mb-4">
+                            <p className="text-xs text-slate-500 mb-1">Beneficiario</p>
+                            <p className="font-medium text-slate-800">
+                              {t.user_bank_account.account_holder}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              {t.user_bank_account.bank_platform?.name || 'Banco'} • {t.user_bank_account.account_number}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Payment info */}
+                        {t.status === 'COMPLETED' && (
+                          <div className="flex items-center justify-between text-sm border-t border-slate-200 pt-3">
+                            {t.payment_reference && (
+                              <div>
+                                <span className="text-slate-500">Ref: </span>
+                                <span className="font-mono font-medium text-slate-700">{t.payment_reference}</span>
+                              </div>
+                            )}
+                            {t.paid_at && (
+                              <div className="text-slate-500">
+                                <span className="font-medium text-green-600">Pagado:</span> {formatDate(t.paid_at)}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
