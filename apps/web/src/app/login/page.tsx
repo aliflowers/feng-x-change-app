@@ -49,8 +49,11 @@ export default function LoginPage() {
               break;
             case 'ADMIN':
             case 'CAJERO':
+            case 'SUPERVISOR':
               router.push('/panel');
               break;
+            case 'CLIENT':
+            case 'AFFILIATE':
             default:
               router.push('/app');
           }

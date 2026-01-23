@@ -21,7 +21,6 @@ import {
   X,
   History,
   Loader2,
-  UserPlus,
   Building2
 } from 'lucide-react';
 
@@ -36,34 +35,17 @@ interface Client {
   document_type: string | null;
   document_number: string | null;
   role: string;
-  agent_code: string | null;
-  agent_id: string | null;
   is_kyc_verified: boolean;
   created_at: string;
   updated_at: string;
-  // Relation
-  agent: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    agent_code: string;
-  } | null;
   // Stats
   total_transactions?: number;
-}
-
-interface AdminUser {
-  id: string;
-  first_name: string;
-  last_name: string;
-  agent_code: string;
 }
 
 const ITEMS_PER_PAGE = 50;
 
 export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [agents, setAgents] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -75,7 +57,6 @@ export default function ClientesPage() {
   // Filters
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [agentFilter, setAgentFilter] = useState('');
   const [kycFilter, setKycFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
 
@@ -95,20 +76,10 @@ export default function ClientesPage() {
 
   useEffect(() => {
     loadClients();
-  }, [currentPage, searchQuery, agentFilter, kycFilter, countryFilter]);
+  }, [currentPage, searchQuery, kycFilter, countryFilter]);
 
   const loadInitialData = async () => {
     try {
-      // Load admin users (agents)
-      const { data: adminData } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, agent_code')
-        .in('role', ['SUPER_ADMIN', 'ADMIN', 'CAJERO'])
-        .not('agent_code', 'is', null)
-        .order('first_name');
-
-      if (adminData) setAgents(adminData);
-
       await loadClients();
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -132,8 +103,6 @@ export default function ClientesPage() {
           document_type,
           document_number,
           role,
-          agent_code,
-          agent_id,
           is_kyc_verified,
           created_at,
           updated_at
@@ -141,10 +110,6 @@ export default function ClientesPage() {
         .eq('role', 'CLIENT');
 
       // Apply filters
-      if (agentFilter) {
-        query = query.eq('agent_id', agentFilter);
-      }
-
       if (kycFilter === 'verified') {
         query = query.eq('is_kyc_verified', true);
       } else if (kycFilter === 'pending') {
@@ -167,37 +132,12 @@ export default function ClientesPage() {
 
       if (error) throw error;
 
-      // Get agent info for each client with agent_id
-      let clientsWithAgents = data || [];
-
-      // Fetch agent profiles for clients that have agent_id
-      const agentIds = [...new Set(clientsWithAgents.filter(c => c.agent_id).map(c => c.agent_id))];
-      let agentMap: Record<string, any> = {};
-
-      if (agentIds.length > 0) {
-        const { data: agentsData } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name, agent_code')
-          .in('id', agentIds);
-
-        if (agentsData) {
-          agentMap = agentsData.reduce((acc, agent) => {
-            acc[agent.id] = agent;
-            return acc;
-          }, {} as Record<string, any>);
-        }
-      }
-
-      // Map agents to clients
-      clientsWithAgents = clientsWithAgents.map(client => ({
-        ...client,
-        agent: client.agent_id ? agentMap[client.agent_id] || null : null
-      }));
+      let clientsList = data || [];
 
       // Client-side search filter
       if (searchQuery.trim()) {
         const search = searchQuery.toLowerCase();
-        clientsWithAgents = clientsWithAgents.filter(c =>
+        clientsList = clientsList.filter(c =>
           c.first_name?.toLowerCase().includes(search) ||
           c.last_name?.toLowerCase().includes(search) ||
           c.email?.toLowerCase().includes(search) ||
@@ -206,14 +146,14 @@ export default function ClientesPage() {
         );
       }
 
-      setClients(clientsWithAgents as Client[]);
+      setClients(clientsList as Client[]);
       setTotalCount(count || 0);
     } catch (error) {
       console.error('Error loading clients:', error);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchQuery, agentFilter, kycFilter, countryFilter]);
+  }, [currentPage, searchQuery, kycFilter, countryFilter]);
 
   const loadClientTransactions = async (clientId: string) => {
     setLoadingTransactions(true);
@@ -321,13 +261,12 @@ export default function ClientesPage() {
 
   const clearFilters = () => {
     setSearchQuery('');
-    setAgentFilter('');
     setKycFilter('');
     setCountryFilter('');
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchQuery || agentFilter || kycFilter || countryFilter;
+  const hasActiveFilters = searchQuery || kycFilter || countryFilter;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-VE', {
@@ -376,7 +315,7 @@ export default function ClientesPage() {
             Filtros
             {hasActiveFilters && (
               <span className="bg-white text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold">
-                {[searchQuery, agentFilter, kycFilter, countryFilter].filter(Boolean).length}
+                {[searchQuery, kycFilter, countryFilter].filter(Boolean).length}
               </span>
             )}
           </button>
@@ -424,26 +363,6 @@ export default function ClientesPage() {
                 placeholder="Nombre, email, documento..."
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-            </div>
-
-            {/* Agent Filter */}
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                <UserPlus size={14} className="inline mr-1" />
-                Agente
-              </label>
-              <select
-                value={agentFilter}
-                onChange={(e) => { setAgentFilter(e.target.value); setCurrentPage(1); }}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Todos</option>
-                {agents.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.first_name} {a.last_name} ({a.agent_code})
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* KYC Filter */}
@@ -524,9 +443,6 @@ export default function ClientesPage() {
                       País
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                      Agente
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                       KYC
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
@@ -567,29 +483,6 @@ export default function ClientesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-700">{client.country || '-'}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {client.agent ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">
-                              {client.agent.first_name?.[0]}{client.agent.last_name?.[0]}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">
-                                {client.agent.first_name} {client.agent.last_name}
-                              </p>
-                              <p className="text-xs text-amber-600 font-mono">
-                                {client.agent.agent_code}
-                              </p>
-                            </div>
-                          </div>
-                        ) : client.agent_code ? (
-                          <span className="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">
-                            Código: {client.agent_code}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-400">Sin agente</span>
-                        )}
                       </td>
                       <td className="px-4 py-3">
                         {client.is_kyc_verified ? (
@@ -678,14 +571,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    {client.agent ? (
-                      <span className="text-xs text-amber-600 font-mono">
-                        Agente: {client.agent.agent_code}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Sin agente</span>
-                    )}
+                  <div className="flex items-center justify-end">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
@@ -849,37 +735,6 @@ export default function ClientesPage() {
                     {selectedClient.nationality || 'N/A'}
                   </p>
                 </div>
-              </div>
-
-              {/* Agent Info */}
-              <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                <div className="flex items-center gap-2 text-amber-700 mb-2">
-                  <UserPlus size={16} />
-                  <span className="font-semibold">Agente Asociado</span>
-                </div>
-                {selectedClient.agent ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center text-amber-700 font-bold">
-                      {selectedClient.agent.first_name?.[0]}{selectedClient.agent.last_name?.[0]}
-                    </div>
-                    <div>
-                      <p className="font-medium text-amber-900">
-                        {selectedClient.agent.first_name} {selectedClient.agent.last_name}
-                      </p>
-                      <p className="text-sm text-amber-600 font-mono">
-                        Código: {selectedClient.agent.agent_code}
-                      </p>
-                    </div>
-                  </div>
-                ) : selectedClient.agent_code ? (
-                  <p className="text-amber-700">
-                    Código ingresado: <span className="font-mono font-bold">{selectedClient.agent_code}</span>
-                    <br />
-                    <span className="text-sm text-amber-600">(Agente no encontrado)</span>
-                  </p>
-                ) : (
-                  <p className="text-amber-600">Este cliente no tiene agente asociado</p>
-                )}
               </div>
 
               {/* Ver Beneficiarios Button */}

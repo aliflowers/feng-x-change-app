@@ -14,8 +14,8 @@
 export interface DelayedPayment {
  /** UUID, PK */
  id: string;
- /** FK → profiles - Agente penalizado */
- agent_id: string;
+ /** FK → profiles - Usuario penalizado */
+ user_id: string;
  /** FK → transactions - Operación que expiró */
  transaction_id: string;
  /** Timestamp cuando expiró el timer */
@@ -26,7 +26,7 @@ export interface DelayedPayment {
  * Resumen de demoras de un agente
  */
 export interface DelayedPaymentSummary {
- agent_id: string;
+ user_id: string;
  agent_name: string;
  /** Total de demoras en el mes actual */
  count_current_month: number;

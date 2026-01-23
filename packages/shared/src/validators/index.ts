@@ -23,7 +23,6 @@ export const createClientProfileSchema = z.object({
  country: z.string().optional(),
  document_type: z.nativeEnum(DocumentType).optional(),
  document_number: z.string().optional(),
- agent_code: z.string().regex(/^AG-[A-Z0-9]{5}$/, 'Código de agente inválido').optional(),
 });
 
 export const createInternalUserSchema = z.object({
@@ -31,7 +30,7 @@ export const createInternalUserSchema = z.object({
  last_name: z.string().min(2).max(50),
  email: z.string().email(),
  phone_number: z.string().optional(),
- role: z.enum([UserRole.ADMIN, UserRole.CAJERO]),
+ role: z.enum([UserRole.ADMIN, UserRole.CAJERO, UserRole.SUPERVISOR]),
  temporary_password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
@@ -173,7 +172,6 @@ export const registerSchema = z.object({
  first_name: z.string().min(2),
  last_name: z.string().min(2),
  phone_number: z.string().optional(),
- agent_code: z.string().regex(/^AG-[A-Z0-9]{5}$/).optional(),
 }).refine(
  (data) => data.password === data.confirmPassword,
  { message: 'Las contraseñas no coinciden', path: ['confirmPassword'] }
@@ -198,7 +196,7 @@ export const transactionFiltersSchema = z.object({
 });
 
 export const commissionFiltersSchema = z.object({
- agent_id: z.string().uuid().optional(),
+ user_id: z.string().uuid().optional(),
  month: z.number().min(1).max(12).optional(),
  year: z.number().min(2024).max(2100).optional(),
  from_date: z.string().datetime().optional(),

@@ -14,8 +14,8 @@
 export interface Commission {
  /** UUID, PK */
  id: string;
- /** FK → profiles - Agente que gana la comisión */
- agent_id: string;
+ /** FK → profiles - Usuario que gana la comisión */
+ user_id: string;
  /** FK → transactions - Operación que generó la comisión */
  transaction_id: string;
  /** Ganancia total de la operación (precisión 18,2) */
@@ -49,8 +49,8 @@ export interface CommissionWithDetails extends Commission {
 export interface CommissionHistory {
  /** UUID, PK */
  id: string;
- /** FK → profiles - Agente */
- agent_id: string;
+ /** FK → profiles - Usuario */
+ user_id: string;
  /** Mes */
  month: number;
  /** Año */
@@ -85,7 +85,7 @@ export interface AgentCommissionSummary {
  * Vista de comisiones para Super Admin
  */
 export interface AgentCommissionOverview {
- agent_id: string;
+ user_id: string;
  agent_name: string;
  role: string;
  commissions_accumulated: number;
@@ -98,7 +98,7 @@ export interface AgentCommissionOverview {
  * Filtros para historial de comisiones
  */
 export interface CommissionFilters {
- agent_id?: string;
+ user_id?: string;
  month?: number;
  year?: number;
  from_date?: string;

@@ -70,7 +70,10 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL('/admin', request.url));
         case 'ADMIN':
         case 'CAJERO':
+        case 'SUPERVISOR':
           return NextResponse.redirect(new URL('/panel', request.url));
+        case 'AFFILIATE':
+        case 'CLIENT':
         default:
           return NextResponse.redirect(new URL('/app', request.url));
       }
@@ -86,13 +89,13 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (profile) {
-      // Cliente no puede acceder a /panel o /admin
-      if (profile.role === 'CLIENT' && (pathname.startsWith('/panel') || pathname.startsWith('/admin'))) {
+      // Client/Affiliate no puede acceder a /panel o /admin
+      if ((profile.role === 'CLIENT' || profile.role === 'AFFILIATE') && (pathname.startsWith('/panel') || pathname.startsWith('/admin'))) {
         return NextResponse.redirect(new URL('/app', request.url));
       }
 
-      // Cajero/Admin no pueden acceder a /admin
-      if ((profile.role === 'CAJERO' || profile.role === 'ADMIN') && pathname.startsWith('/admin')) {
+      // Cajero/Admin/Supervisor no pueden acceder a /admin
+      if ((profile.role === 'CAJERO' || profile.role === 'ADMIN' || profile.role === 'SUPERVISOR') && pathname.startsWith('/admin')) {
         return NextResponse.redirect(new URL('/panel', request.url));
       }
     }

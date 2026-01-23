@@ -28,10 +28,7 @@ export interface Profile {
  document_number: string | null;
  /** Rol del usuario en el sistema */
  role: UserRole;
- /** Código de agente único (solo para ADMIN/CAJERO) - Ej: AG-X7K2P */
- agent_code: string | null;
- /** FK → profiles.id - Agente asociado (solo para CLIENT) */
- agent_id: string | null;
+
  /** Estado de verificación KYC */
  is_kyc_verified: boolean;
  /** True para nuevos ADMIN/CAJERO que deben cambiar contraseña */
@@ -51,8 +48,7 @@ export interface CreateClientProfileInput {
  country?: string;
  document_type?: DocumentType;
  document_number?: string;
- /** Código de agente opcional para asociación */
- agent_code?: string;
+
 }
 
 /**
@@ -64,8 +60,8 @@ export interface CreateInternalUserInput {
  last_name: string;
  email: string;
  phone_number?: string;
- /** Rol a asignar (ADMIN o CAJERO) */
- role: UserRole.ADMIN | UserRole.CAJERO;
+ /** Rol a asignar (ADMIN, CAJERO, o SUPERVISOR) */
+ role: UserRole.ADMIN | UserRole.CAJERO | UserRole.SUPERVISOR;
  /** Contraseña temporal que el usuario deberá cambiar */
  temporary_password: string;
 }
@@ -92,6 +88,6 @@ export interface ProfileSummary {
  email: string;
  role: UserRole;
  is_kyc_verified: boolean;
- agent_code: string | null;
+
  created_at: string;
 }

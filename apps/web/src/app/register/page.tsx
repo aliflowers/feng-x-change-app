@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Eye, EyeOff, Mail, Lock, User, Phone, UserPlus, ArrowRight, Shield, Zap, Globe, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Shield, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,47 +15,18 @@ export default function RegisterPage() {
     first_name: '',
     last_name: '',
     phone_number: '',
-    agent_code: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [agentCodeValid, setAgentCodeValid] = useState<boolean | null>(null);
 
-  // Validar código de agente en tiempo real
-  const validateAgentCode = async (code: string) => {
-    if (!code || code.length < 8) {
-      setAgentCodeValid(null);
-      return;
-    }
 
-    // Formato: AG-XXXXX
-    if (!/^AG-[A-Z0-9]{5}$/i.test(code)) {
-      setAgentCodeValid(false);
-      return;
-    }
 
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('agent_code', code.toUpperCase())
-        .single();
-
-      setAgentCodeValid(!error && !!data);
-    } catch {
-      setAgentCodeValid(false);
-    }
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    if (name === 'agent_code') {
-      validateAgentCode(value);
-    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -73,10 +44,7 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.agent_code && agentCodeValid === false) {
-      setError('El código de agente no es válido');
-      return;
-    }
+
 
     setLoading(true);
 
@@ -89,7 +57,6 @@ export default function RegisterPage() {
             first_name: formData.first_name,
             last_name: formData.last_name,
             phone_number: formData.phone_number || null,
-            agent_code: formData.agent_code.toUpperCase() || null,
           },
         },
       });
@@ -285,41 +252,6 @@ export default function RegisterPage() {
                     placeholder="+58 412 1234567"
                   />
                 </div>
-              </div>
-
-              {/* Código de Agente */}
-              <div>
-                <label htmlFor="agent_code" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Código de Agente <span className="text-gray-400 font-normal">(opcional)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <UserPlus size={18} />
-                  </div>
-                  <input
-                    id="agent_code"
-                    name="agent_code"
-                    type="text"
-                    value={formData.agent_code}
-                    onChange={handleChange}
-                    className={`w-full bg-gray-50 border rounded-xl px-3 py-3 pl-10 pr-10 text-gray-900 text-sm uppercase focus:ring-2 focus:border-transparent transition-all ${agentCodeValid === true
-                        ? 'border-green-500 focus:ring-green-500/50'
-                        : agentCodeValid === false
-                          ? 'border-red-500 focus:ring-red-500/50'
-                          : 'border-gray-200 focus:ring-[#05294F]'
-                      }`}
-                    placeholder="AG-XXXXX"
-                    maxLength={8}
-                  />
-                  {agentCodeValid !== null && (
-                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${agentCodeValid ? 'text-green-500' : 'text-red-500'}`}>
-                      {agentCodeValid ? <CheckCircle size={18} /> : '✗'}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Si un agente te refirió, ingresa su código
-                </p>
               </div>
 
               {/* Password */}

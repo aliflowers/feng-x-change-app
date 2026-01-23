@@ -6,14 +6,18 @@
 /**
  * Roles de usuario en el sistema
  * - CLIENT: Usuario final que realiza operaciones de cambio
+ * - AFFILIATE: Refiere clientes y gana comisiones, sin acceso a /panel
  * - CAJERO: Procesa operaciones de sus clientes, tiene timer de 15 min
  * - ADMIN: Gestiona transacciones de sus clientes, tiene timer de 15 min
+ * - SUPERVISOR: Supervisa operaciones, tiene timer de 15 min
  * - SUPER_ADMIN: Acceso total, crea usuarios, ve ganancias, sin timer
  */
 export enum UserRole {
  CLIENT = 'CLIENT',
+ AFFILIATE = 'AFFILIATE',
  CAJERO = 'CAJERO',
  ADMIN = 'ADMIN',
+ SUPERVISOR = 'SUPERVISOR',
  SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
