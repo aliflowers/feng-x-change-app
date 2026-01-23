@@ -66,11 +66,13 @@ const FlagIcon = ({ code, size = 40 }: { code: string; size?: number }) => {
  return flags[code] || <div className="w-10 h-7 bg-gray-200 rounded flex items-center justify-center text-xs">💱</div>;
 };
 
-interface BankPlatform {
+interface Bank {
  id: number;
  name: string;
- currency_id: number;
+ currency_code: string;
+ country_code: string;
  type: string;
+ code: string | null;
 }
 
 interface Currency {
@@ -94,12 +96,12 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
 
  // Catalogs
  const [currencies, setCurrencies] = useState<Currency[]>([]);
- const [banks, setBanks] = useState<BankPlatform[]>([]);
+ const [banks, setBanks] = useState<Bank[]>([]);
 
  // Form State
  const [selectedCurrency, setSelectedCurrency] = useState<number>(0);
  const [formData, setFormData] = useState({
-  bank_platform_id: '',
+  bank_id: '',
   account_number: '',
   account_holder: '',
   document_number: '',
@@ -116,13 +118,16 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
     const { data: curData } = await supabase.from('currencies').select('*').order('id');
     if (curData) setCurrencies(curData);
 
-    const { data: bankData } = await supabase.from('banks_platforms').select('*').eq('is_active', true);
+    const { data: bankData } = await supabase.from('banks').select('id, name, country_code, currency_code, type, code').eq('is_active', true);
     if (bankData) setBanks(bankData);
 
-    // Load beneficiary data
+    // Load beneficiary data with both bank joins
     const { data: beneficiary, error } = await supabase
      .from('user_bank_accounts')
-     .select('*, banks_platforms(currency_id)')
+     .select(`*, 
+       bank:banks(name, currency_code),
+       banks_platforms(currency_id, currencies(code))
+     `)
      .eq('id', id)
      .single();
 
@@ -131,9 +136,9 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
      return;
     }
 
-    // Set form data
+    // Set form data - use bank_id if available, fallback to bank_platform_id for old records
     setFormData({
-     bank_platform_id: beneficiary.bank_platform_id?.toString() || '',
+     bank_id: beneficiary.bank_id?.toString() || beneficiary.bank_platform_id?.toString() || '',
      account_number: beneficiary.account_number || '',
      account_holder: beneficiary.account_holder || '',
      document_number: beneficiary.document_number || '',
@@ -142,8 +147,12 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
      alias: beneficiary.alias || '',
     });
 
-    // Set selected currency based on bank's currency
-    if (beneficiary.banks_platforms?.currency_id) {
+    // Set selected currency based on bank's currency (new or old records)
+    const currCode = beneficiary.bank?.currency_code || beneficiary.banks_platforms?.currencies?.code;
+    if (currCode) {
+     const cur = curData?.find(c => c.code === currCode);
+     if (cur) setSelectedCurrency(cur.id);
+    } else if (beneficiary.banks_platforms?.currency_id) {
      setSelectedCurrency(beneficiary.banks_platforms.currency_id);
     }
    } catch (error) {
@@ -156,14 +165,14 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
   loadData();
  }, [id]);
 
- const availableBanks = banks.filter(b => b.currency_id === selectedCurrency);
  const currentCurrencyCode = currencies.find(c => c.id === selectedCurrency)?.code;
+ const availableBanks = banks.filter(b => b.currency_code === currentCurrencyCode);
 
  const validateForm = () => {
   const newErrors: Record<string, string> = {};
 
   const result = updateUserBankAccountSchema.safeParse({
-   bank_platform_id: parseInt(formData.bank_platform_id),
+   bank_platform_id: parseInt(formData.bank_id) || 1, // Schema still expects bank_platform_id
    account_number: formData.account_number,
    account_holder: formData.account_holder,
    document_number: formData.document_number,
@@ -199,7 +208,7 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
    if (!user) throw new Error('No Authenticated User');
 
    const payload = {
-    bank_platform_id: parseInt(formData.bank_platform_id),
+    bank_id: parseInt(formData.bank_id),
     account_number: formData.account_number,
     account_holder: formData.account_holder,
     document_number: formData.document_number,
@@ -334,10 +343,10 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
         <label className="text-sm font-medium text-gray-700">Banco / Plataforma</label>
         <div className="relative">
          <select
-          name="bank_platform_id"
-          value={formData.bank_platform_id}
+          name="bank_id"
+          value={formData.bank_id}
           onChange={handleChange}
-          className={`input appearance-none w-full ${errors.bank_platform_id ? 'border-red-500 focus:ring-red-200' : ''}`}
+          className={`input appearance-none w-full ${errors.bank_id ? 'border-red-500 focus:ring-red-200' : ''}`}
           required
          >
           <option value="">Selecciona una opción</option>
@@ -348,7 +357,7 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
          <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
         </div>
-        {errors.bank_platform_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_platform_id}</p>}
+        {errors.bank_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_id}</p>}
        </div>
 
        {/* Número de Cuenta */}
