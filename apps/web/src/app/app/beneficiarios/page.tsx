@@ -117,13 +117,13 @@ export default function BeneficiariesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta cuenta?')) return;
+    if (!confirm('¿Estás seguro de eliminar esta cuenta? Esta acción no se puede deshacer.')) return;
 
     try {
-      // Soft delete
+      // Hard delete - eliminar completamente de la base de datos
       const { error } = await supabase
         .from('user_bank_accounts')
-        .update({ is_active: false })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;

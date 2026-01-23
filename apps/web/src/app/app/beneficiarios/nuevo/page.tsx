@@ -151,7 +151,6 @@ const documentTypeOptions = [
       { value: 'CI-V', label: 'Cédula de Identidad (V)' },
       { value: 'CI-E', label: 'Cédula de Identidad (E)' },
       { value: 'RIF-V', label: 'RIF Personal (V)' },
-      { value: 'RIF-J', label: 'RIF Jurídico (J)' },
     ]
   },
   {
@@ -197,20 +196,40 @@ const documentTypeOptions = [
   {
     country: 'WORLD', label: 'Universal', options: [
       { value: 'PASAPORTE', label: 'Pasaporte' },
-      { value: 'ID', label: 'ID/Identificación General' },
     ]
   },
 ];
 
+// Mapeo de código de moneda a código de país
+const currencyToCountryMap: Record<string, string> = {
+  'VES': 'VE',
+  'COP': 'CO',
+  'PEN': 'PE',
+  'CLP': 'CL',
+  'PAB': 'PA',
+  'USD': 'US',
+  'EUR': 'EU',
+};
+
 // Componente personalizado de selección de tipo de documento
 const DocumentTypeSelect = ({
   value,
-  onChange
+  onChange,
+  currencyCode
 }: {
   value: string;
   onChange: (value: string) => void;
+  currencyCode?: string;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Filtrar opciones según la moneda seleccionada
+  const filteredOptions = currencyCode
+    ? documentTypeOptions.filter(group =>
+      group.country === currencyToCountryMap[currencyCode] ||
+      group.country === 'WORLD'
+    )
+    : documentTypeOptions;
 
   // Obtener la opción seleccionada
   const getSelectedOption = () => {
@@ -256,7 +275,7 @@ const DocumentTypeSelect = ({
 
           {/* Lista de opciones */}
           <div className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl max-h-80 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
-            {documentTypeOptions.map(group => (
+            {filteredOptions.map(group => (
               <div key={group.country}>
                 {/* Header del grupo */}
                 <div className="sticky top-0 px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
@@ -322,7 +341,6 @@ export default function NewBeneficiaryPage() {
     account_holder: '',
     document_type: '', // Tipo de documento
     document_number: '', // Número de documento
-    account_type: 'SAVINGS',
     email: '',
     alias: '',
   });
@@ -362,7 +380,6 @@ export default function NewBeneficiaryPage() {
       account_number: formData.account_number,
       account_holder: formData.account_holder,
       document_number: formData.document_number,
-      account_type: formData.account_type,
       email: formData.email,
       alias: formData.alias,
     });
@@ -415,8 +432,8 @@ export default function NewBeneficiaryPage() {
         account_holder: formData.account_holder,
         document_type: formData.document_type || null,
         document_number: formData.document_number,
-        // Auto-set account_type for wallets and Pago Móvil
-        account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : formData.account_type,
+        // Auto-set account_type: WALLET para móviles/digitales, SAVINGS para bancos normales
+        account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : 'SAVINGS',
         email: formData.email || null,
         alias: formData.alias || null,
         is_active: true
@@ -437,7 +454,27 @@ export default function NewBeneficiaryPage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+
+    // Para VES, solo permitir dígitos numéricos en account_number (máximo 20)
+    if (name === 'account_number' && currentCurrencyCode === 'VES') {
+      value = value.replace(/\D/g, '').slice(0, 20);
+    }
+
+    // Para COP - Bancolombia: solo numérico, máximo 11 dígitos
+    if (name === 'account_number' && selectedBank?.name === 'Bancolombia') {
+      value = value.replace(/\D/g, '').slice(0, 11);
+    }
+
+    // Para COP - Nequi: solo numérico, máximo 10 dígitos (teléfono colombiano)
+    if (name === 'account_number' && selectedBank?.name === 'Nequi') {
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+
+    // Para document_number, solo permitir dígitos numéricos
+    if (name === 'document_number') {
+      value = value.replace(/\D/g, '');
+    }
 
     // Si cambia el banco, actualizar prefijo de cuenta para bancos VES
     if (name === 'bank_id' && value) {
@@ -562,13 +599,7 @@ export default function NewBeneficiaryPage() {
                         <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                       </div>
-                      <button
-                        type="button"
-                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-                        onClick={() => alert('Para agregar un nuevo banco, contacta a soporte@fengxchange.com')}
-                      >
-                        <span className="text-lg leading-none">+</span> ¿No encuentras tu banco? Solicita agregarlo
-                      </button>
+                      
                     </div>
                   )}
                   {errors.bank_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_id}</p>}
@@ -628,18 +659,22 @@ export default function NewBeneficiaryPage() {
                     <div className="relative">
                       <input
                         type={['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '') ? 'tel' : 'text'}
+                        inputMode={['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '') ? 'numeric' : undefined}
+                        maxLength={selectedBank?.name === 'Nequi' ? 10 : undefined}
                         name="account_number"
                         value={formData.account_number}
                         onChange={handleChange}
                         className={`input pl-10 w-full ${errors.account_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                        placeholder={['Nequi', 'DaviPlata'].includes(selectedBank?.name || '') ? '3001234567' :
-                          ['Yape', 'Plin'].includes(selectedBank?.name || '') ? '912345678' : 'correo@ejemplo.com'}
+                        placeholder={selectedBank?.name === 'Nequi' ? '3001234567' :
+                          ['DaviPlata'].includes(selectedBank?.name || '') ? '3001234567' :
+                            ['Yape', 'Plin'].includes(selectedBank?.name || '') ? '912345678' : 'correo@ejemplo.com'}
                       />
                       {['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '')
                         ? <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         : <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />}
                     </div>
                     {errors.account_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.account_number}</p>}
+                    {selectedBank?.name === 'Nequi' && <p className="text-xs text-gray-400">Número de celular de 10 dígitos</p>}
                   </div>
                 ) : (
                   /* BANCO NORMAL - Número de cuenta */
@@ -650,38 +685,24 @@ export default function NewBeneficiaryPage() {
                     <div className="relative">
                       <input
                         type="text"
+                        inputMode={currentCurrencyCode === 'VES' || selectedBank?.name === 'Bancolombia' ? 'numeric' : undefined}
+                        maxLength={currentCurrencyCode === 'VES' ? 20 : selectedBank?.name === 'Bancolombia' ? 11 : undefined}
                         name="account_number"
                         value={formData.account_number}
                         onChange={handleChange}
                         className={`input pl-10 w-full font-mono ${errors.account_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                        placeholder={currentCurrencyCode === 'VES' ? '01020000000000000000' : ''}
+                        placeholder={currentCurrencyCode === 'VES' ? '01020000000000000000' :
+                          selectedBank?.name === 'Bancolombia' ? '12345678901' : ''}
                       />
                       <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                     {errors.account_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.account_number}</p>}
                     {currentCurrencyCode === 'VES' && !isPagoMovil && <p className="text-xs text-gray-400">Debe tener 20 dígitos numéricos. Los primeros 4 son el código del banco.</p>}
+                    {selectedBank?.name === 'Bancolombia' && <p className="text-xs text-gray-400">Número de cuenta de 11 dígitos numéricos</p>}
                   </div>
                 )}
 
-                {/* Tipo de Cuenta - Solo para bancos normales */}
-                {!isPagoMovil && !isDigitalWallet && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Tipo de Cuenta</label>
-                    <div className="relative">
-                      <select
-                        name="account_type"
-                        value={formData.account_type}
-                        onChange={handleChange}
-                        className="input appearance-none w-full pl-10"
-                      >
-                        <option value="SAVINGS">Ahorros</option>
-                        <option value="CHECKING">Corriente</option>
-                      </select>
-                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
-                    </div>
-                  </div>
-                )}
+                {/* Campo Tipo de Cuenta eliminado - se asigna automáticamente */}
 
                 {/* Tipo de Documento - Componente personalizado con banderas */}
                 <div className="space-y-1.5">
@@ -689,6 +710,7 @@ export default function NewBeneficiaryPage() {
                   <DocumentTypeSelect
                     value={formData.document_type}
                     onChange={(value) => setFormData(prev => ({ ...prev, document_type: value }))}
+                    currencyCode={currentCurrencyCode}
                   />
                 </div>
 

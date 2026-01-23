@@ -219,6 +219,7 @@ export default function ClientesPage() {
           document_number,
           is_active,
           created_at,
+          bank:banks(id, name, type, currency_code),
           bank_platform:banks_platforms(id, name, type)
         `)
         .eq('user_id', clientId)
@@ -234,9 +235,13 @@ export default function ClientesPage() {
         throw error;
       }
 
-      // Transform data
-      const transformed = (data || []).map(b => ({
+      // Filtrar solo activos (por si acaso queda alguno con soft-delete)
+      const activeBeneficiaries = (data || []).filter(b => b.is_active !== false);
+
+      // Transform data - usar bank (nuevo) o bank_platform (legacy)
+      const transformed = activeBeneficiaries.map(b => ({
         ...b,
+        bank: Array.isArray(b.bank) ? b.bank[0] : b.bank,
         bank_platform: Array.isArray(b.bank_platform) ? b.bank_platform[0] : b.bank_platform,
       }));
 
@@ -934,7 +939,7 @@ export default function ClientesPage() {
                               {beneficiary.account_holder}
                             </p>
                             <p className="text-sm text-slate-600">
-                              {beneficiary.bank_platform?.name || 'Banco no especificado'}
+                              {beneficiary.bank?.name || beneficiary.bank_platform?.name || 'Banco no especificado'}
                             </p>
                           </div>
                         </div>
@@ -974,14 +979,14 @@ export default function ClientesPage() {
                         </div>
 
                         {/* Bank Type */}
-                        {beneficiary.bank_platform?.type && (
+                        {(beneficiary.bank?.type || beneficiary.bank_platform?.type) && (
                           <div className="bg-white rounded-lg p-3 border border-slate-200">
                             <div className="flex items-center gap-2 text-slate-500 mb-1">
                               <Building2 size={14} />
                               <span className="text-xs font-medium">Tipo</span>
                             </div>
                             <p className="font-medium text-slate-700">
-                              {beneficiary.bank_platform.type}
+                              {beneficiary.bank?.type || beneficiary.bank_platform?.type}
                             </p>
                           </div>
                         )}

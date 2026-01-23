@@ -20,8 +20,8 @@ export interface UserBankAccount {
  account_holder: string;
  /** Documento del titular (C.I., RIF, NIT) */
  document_number: string;
- /** Tipo de cuenta (SAVINGS, CHECKING, WALLET) */
- account_type: string;
+ /** Tipo de cuenta (SAVINGS, CHECKING, WALLET) - ahora opcional */
+ account_type?: string | null;
  /** Email asociado (opcional, para Zelle/Zinli) */
  email: string | null;
  /** Alias para identificar la cuenta */
@@ -38,7 +38,7 @@ export interface CreateUserBankAccountInput {
  account_number: string;
  account_holder: string;
  document_number: string;
- account_type: string;
+ account_type?: string; // Ahora opcional, se asigna automáticamente
  email?: string;
  alias?: string;
 }

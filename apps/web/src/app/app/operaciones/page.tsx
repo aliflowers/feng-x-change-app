@@ -157,7 +157,6 @@ export default function OperacionesPage() {
     account_holder: '',
     document_type: '',
     document_number: '',
-    account_type: 'SAVINGS',
   });
 
   // Load data
@@ -328,7 +327,6 @@ export default function OperacionesPage() {
   const isDigitalWallet = digitalWallets.includes(selectedBankForModal?.name || '');
   const isPhoneWallet = phoneWallets.includes(selectedBankForModal?.name || '');
 
-  // Reset and open modal
   const openAddModal = () => {
     setNewBeneficiaryForm({
       bank_id: '',
@@ -336,7 +334,6 @@ export default function OperacionesPage() {
       account_holder: '',
       document_type: '',
       document_number: '',
-      account_type: 'SAVINGS',
     });
     setShowAddModal(true);
   };
@@ -363,7 +360,7 @@ export default function OperacionesPage() {
         account_holder: newBeneficiaryForm.account_holder,
         document_type: newBeneficiaryForm.document_type || null,
         document_number: newBeneficiaryForm.document_number || null,
-        account_type: newBeneficiaryForm.account_type,
+        account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : 'SAVINGS', // Valor por defecto
         is_active: true
       };
 

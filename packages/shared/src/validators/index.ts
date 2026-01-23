@@ -129,7 +129,7 @@ export const createUserBankAccountSchema = z.object({
  account_number: z.string().min(5).max(50),
  account_holder: z.string().min(3).max(100),
  document_number: z.string().min(4).max(20),
- account_type: z.string(), // Debería ser un enum, pero por ahora string
+ account_type: z.string().optional(), // Ahora opcional, se asigna automáticamente
  email: z.string().email().optional().or(z.literal('')),
  alias: z.string().max(50).optional(),
 });
