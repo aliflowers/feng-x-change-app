@@ -20,6 +20,17 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [countryCode, setCountryCode] = useState('+58');
+
+  // Países disponibles con sus códigos telefónicos
+  const countries = [
+    { code: 'VE', dial: '+58', name: 'Venezuela', flag: '/flags/ve.svg', placeholder: '412 1234567' },
+    { code: 'CO', dial: '+57', name: 'Colombia', flag: '/flags/co.svg', placeholder: '310 1234567' },
+    { code: 'US', dial: '+1', name: 'Estados Unidos', flag: '/flags/us.svg', placeholder: '202 555 0123' },
+    { code: 'CL', dial: '+56', name: 'Chile', flag: '/flags/cl.svg', placeholder: '9 1234 5678' },
+    { code: 'PA', dial: '+507', name: 'Panamá', flag: '/flags/pa.svg', placeholder: '6123 4567' },
+    { code: 'PE', dial: '+51', name: 'Perú', flag: '/flags/pe.svg', placeholder: '912 345 678' },
+  ];
 
 
 
@@ -44,11 +55,18 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!formData.phone_number.trim()) {
+      setError('El número de teléfono es obligatorio');
+      return;
+    }
 
 
     setLoading(true);
 
     try {
+      // Combinar código de país con el número de teléfono
+      const fullPhoneNumber = `${countryCode} ${formData.phone_number.trim()}`;
+
       const { data, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -56,7 +74,7 @@ export default function RegisterPage() {
           data: {
             first_name: formData.first_name,
             last_name: formData.last_name,
-            phone_number: formData.phone_number || null,
+            phone_number: fullPhoneNumber,
           },
         },
       });
@@ -171,7 +189,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Nombre
+                    Nombre <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -191,7 +209,7 @@ export default function RegisterPage() {
                 </div>
                 <div>
                   <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Apellido
+                    Apellido <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -214,7 +232,7 @@ export default function RegisterPage() {
               {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Correo electrónico
+                  Correo electrónico <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -236,28 +254,61 @@ export default function RegisterPage() {
               {/* Teléfono */}
               <div>
                 <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+                  Teléfono <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <Phone size={18} />
+                <div className="flex gap-2">
+                  {/* Selector de código de país */}
+                  <div className="relative">
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      className="appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 pr-8 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all cursor-pointer"
+                      style={{ minWidth: '120px' }}
+                    >
+                      {countries.map((country) => (
+                        <option key={country.code} value={country.dial}>
+                          {country.code} {country.dial}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Bandera del país seleccionado */}
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <img
+                        src={countries.find(c => c.dial === countryCode)?.flag || '/flags/ve.svg'}
+                        alt=""
+                        className="w-5 h-4 object-cover rounded-sm"
+                      />
+                    </div>
+                    {/* Flecha del select */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
                   </div>
-                  <input
-                    id="phone_number"
-                    name="phone_number"
-                    type="tel"
-                    value={formData.phone_number}
-                    onChange={handleChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
-                    placeholder="+58 412 1234567"
-                  />
+                  {/* Input del número */}
+                  <div className="relative flex-1">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Phone size={18} />
+                    </div>
+                    <input
+                      id="phone_number"
+                      name="phone_number"
+                      type="tel"
+                      value={formData.phone_number}
+                      onChange={handleChange}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 pl-10 text-gray-900 text-sm focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
+                      placeholder={countries.find(c => c.dial === countryCode)?.placeholder || '412 1234567'}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Password */}
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Contraseña
+                  Contraseña <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -288,7 +339,7 @@ export default function RegisterPage() {
               {/* Confirm Password */}
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Confirmar Contraseña
+                  Confirmar Contraseña <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">

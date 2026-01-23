@@ -39,45 +39,19 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Rutas protegidas
-  const protectedPaths = ['/app', '/panel', '/admin'];
+  const protectedPaths = ['/app', '/panel'];
   const isProtectedPath = protectedPaths.some((path) =>
     pathname.startsWith(path)
   );
 
-  // Rutas de auth (login, register)
-  const authPaths = ['/login', '/register'];
-  const isAuthPath = authPaths.some((path) => pathname.startsWith(path));
+  // Rutas de auth (login, register) - son para clientes públicos
+  // No redirigimos usuarios logueados, las páginas manejan su propia lógica
 
   // Si no hay sesión y trata de acceder a ruta protegida
   if (!session && isProtectedPath) {
     const redirectUrl = new URL('/login', request.url);
     redirectUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(redirectUrl);
-  }
-
-  // Si hay sesión y trata de acceder a login/register
-  if (session && isAuthPath) {
-    // Obtener rol del usuario
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profile) {
-      switch (profile.role) {
-        case 'SUPER_ADMIN':
-          return NextResponse.redirect(new URL('/admin', request.url));
-        case 'ADMIN':
-        case 'CAJERO':
-        case 'SUPERVISOR':
-          return NextResponse.redirect(new URL('/panel', request.url));
-        case 'AFFILIATE':
-        case 'CLIENT':
-        default:
-          return NextResponse.redirect(new URL('/app', request.url));
-      }
-    }
   }
 
   // Verificar acceso a rutas por rol
@@ -89,14 +63,9 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (profile) {
-      // Client/Affiliate no puede acceder a /panel o /admin
-      if ((profile.role === 'CLIENT' || profile.role === 'AFFILIATE') && (pathname.startsWith('/panel') || pathname.startsWith('/admin'))) {
+      // Client/Affiliate no puede acceder a /panel
+      if ((profile.role === 'CLIENT' || profile.role === 'AFFILIATE') && pathname.startsWith('/panel')) {
         return NextResponse.redirect(new URL('/app', request.url));
-      }
-
-      // Cajero/Admin/Supervisor no pueden acceder a /admin
-      if ((profile.role === 'CAJERO' || profile.role === 'ADMIN' || profile.role === 'SUPERVISOR') && pathname.startsWith('/admin')) {
-        return NextResponse.redirect(new URL('/panel', request.url));
       }
     }
   }
@@ -108,7 +77,6 @@ export const config = {
   matcher: [
     '/app/:path*',
     '/panel/:path*',
-    '/admin/:path*',
     '/login',
     '/register',
   ],

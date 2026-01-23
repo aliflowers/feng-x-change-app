@@ -46,10 +46,69 @@ interface UserBankAccount {
   };
 }
 
+interface BankPlatform {
+  id: number;
+  name: string;
+  currency_id: number;
+  type: string;
+  bank_code: string | null;
+}
+
 interface SelectedBeneficiary {
   accountId: string;
   amountToSend: number; // Monto en moneda origen (USD/EUR)
 }
+
+// Mapeo de código de moneda a código de país para tipos de documento
+const currencyToCountryMap: Record<string, string> = {
+  'VES': 'VE', 'COP': 'CO', 'PEN': 'PE', 'CLP': 'CL', 'PAB': 'PA', 'USD': 'US', 'EUR': 'EU',
+};
+
+// Tipos de documento por país
+const documentTypesByCountry: Record<string, { value: string; label: string }[]> = {
+  'VE': [{ value: 'CI-V', label: 'Cédula (V)' }, { value: 'CI-E', label: 'Cédula (E)' }, { value: 'RIF-V', label: 'RIF (V)' }, { value: 'RIF-J', label: 'RIF (J)' }],
+  'CO': [{ value: 'CC', label: 'Cédula (CC)' }, { value: 'NIT', label: 'NIT' }, { value: 'CE-CO', label: 'Cédula Extranjería' }],
+  'PE': [{ value: 'DNI-PE', label: 'DNI Perú' }, { value: 'RUC', label: 'RUC' }, { value: 'CE-PE', label: 'Carnet Extranjería' }],
+  'CL': [{ value: 'RUT', label: 'RUT/RUN Chile' }],
+  'PA': [{ value: 'CIP', label: 'Cédula Personal' }, { value: 'RUC-PA', label: 'RUC Panamá' }],
+  'US': [{ value: 'SSN', label: 'SSN' }, { value: 'EIN', label: 'EIN' }, { value: 'ITIN', label: 'ITIN' }],
+  'EU': [{ value: 'DNI-ES', label: 'DNI España' }, { value: 'NIE', label: 'NIE' }, { value: 'NIF', label: 'NIF' }],
+};
+
+// Billeteras digitales que usan email/teléfono
+const digitalWallets = ['Nequi', 'DaviPlata', 'Yape', 'Plin', 'Zinli', 'Binance Pay', 'PayPal', 'Zelle', 'Venmo', 'CashApp'];
+const phoneWallets = ['Nequi', 'DaviPlata', 'Yape', 'Plin'];
+
+// Lista completa de bancos venezolanos para Pago Móvil (códigos oficiales)
+const venezuelanBanks = [
+  { code: '0102', name: 'Banco de Venezuela' },
+  { code: '0104', name: 'Venezolano de Crédito' },
+  { code: '0105', name: 'Banco Mercantil' },
+  { code: '0108', name: 'Banco Provincial' },
+  { code: '0114', name: 'Bancaribe' },
+  { code: '0115', name: 'Banco Exterior' },
+  { code: '0116', name: 'BOD (Banco Occidental de Descuento)' },
+  { code: '0128', name: 'Banco Caroní' },
+  { code: '0134', name: 'Banesco' },
+  { code: '0137', name: 'Sofitasa' },
+  { code: '0138', name: 'Banco Plaza' },
+  { code: '0146', name: 'Bangente' },
+  { code: '0151', name: 'BFC Banco Fondo Común' },
+  { code: '0156', name: '100% Banco' },
+  { code: '0157', name: 'Delsur Banco Universal' },
+  { code: '0163', name: 'Banco del Tesoro' },
+  { code: '0166', name: 'Banco Agrícola de Venezuela' },
+  { code: '0168', name: 'Bancrecer' },
+  { code: '0169', name: 'Mi Banco' },
+  { code: '0171', name: 'Banco Activo' },
+  { code: '0172', name: 'Bancamiga' },
+  { code: '0173', name: 'Banco Internacional de Desarrollo' },
+  { code: '0174', name: 'Banplus' },
+  { code: '0175', name: 'Banco Bicentenario' },
+  { code: '0177', name: 'Banfanb' },
+  { code: '0178', name: 'N58 Banco Digital' },
+  { code: '0191', name: 'Banco Nacional de Crédito (BNC)' },
+];
 
 const steps = [
   { id: 1, name: 'Calculadora', icon: Calculator },
@@ -81,6 +140,19 @@ export default function OperacionesPage() {
   // Multiple proof files
   const [proofFiles, setProofFiles] = useState<File[]>([]);
   const [proofPreviews, setProofPreviews] = useState<string[]>([]);
+
+  // Add beneficiary modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [banks, setBanks] = useState<BankPlatform[]>([]);
+  const [addingBeneficiary, setAddingBeneficiary] = useState(false);
+  const [newBeneficiaryForm, setNewBeneficiaryForm] = useState({
+    bank_platform_id: '',
+    account_number: '',
+    account_holder: '',
+    document_type: '',
+    document_number: '',
+    account_type: 'SAVINGS',
+  });
 
   // Load data
   useEffect(() => {
@@ -120,9 +192,16 @@ export default function OperacionesPage() {
         .eq('user_id', user.id)
         .eq('is_active', true);
 
+      // Load banks for add modal
+      const { data: banksData } = await supabase
+        .from('banks_platforms')
+        .select('id, name, currency_id, type, bank_code')
+        .eq('is_active', true);
+
       if (currenciesData) setCurrencies(currenciesData);
       if (ratesData) setExchangeRates(ratesData);
       if (accountsData) setUserAccounts(accountsData as unknown as UserBankAccount[]);
+      if (banksData) setBanks(banksData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Error al cargar los datos');
@@ -216,6 +295,89 @@ export default function OperacionesPage() {
   const removeProofFile = (index: number) => {
     setProofFiles(prev => prev.filter((_, i) => i !== index));
     setProofPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Banks available for the selected destination currency
+  const availableBanks = banks.filter(b => b.currency_id === toCurrencyId);
+
+  // Current currency code and country
+  const toCurrencyCode = getCurrency(toCurrencyId)?.code || '';
+  const toCountryCode = currencyToCountryMap[toCurrencyCode] || 'VE';
+  const documentTypesForCurrency = documentTypesByCountry[toCountryCode] || [];
+
+  // Selected bank detection for dynamic form
+  const selectedBankForModal = banks.find(b => b.id.toString() === newBeneficiaryForm.bank_platform_id);
+  const isPagoMovil = selectedBankForModal?.name === 'Pago Móvil';
+  const isDigitalWallet = digitalWallets.includes(selectedBankForModal?.name || '');
+  const isPhoneWallet = phoneWallets.includes(selectedBankForModal?.name || '');
+
+  // Reset and open modal
+  const openAddModal = () => {
+    setNewBeneficiaryForm({
+      bank_platform_id: '',
+      account_number: '',
+      account_holder: '',
+      document_type: '',
+      document_number: '',
+      account_type: 'SAVINGS',
+    });
+    setShowAddModal(true);
+  };
+
+  // Handle add beneficiary from modal
+  const handleAddBeneficiary = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBeneficiaryForm.bank_platform_id || !newBeneficiaryForm.account_number || !newBeneficiaryForm.account_holder) {
+      setError('Completa todos los campos obligatorios');
+      return;
+    }
+
+    setAddingBeneficiary(true);
+    setError(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No autenticado');
+
+      const payload = {
+        user_id: user.id,
+        bank_platform_id: parseInt(newBeneficiaryForm.bank_platform_id),
+        account_number: newBeneficiaryForm.account_number,
+        account_holder: newBeneficiaryForm.account_holder,
+        document_type: newBeneficiaryForm.document_type || null,
+        document_number: newBeneficiaryForm.document_number || null,
+        account_type: newBeneficiaryForm.account_type,
+        is_active: true
+      };
+
+      const { error: insertError } = await supabase.from('user_bank_accounts').insert(payload);
+      if (insertError) throw insertError;
+
+      // Reload accounts
+      const { data: accountsData } = await supabase
+        .from('user_bank_accounts')
+        .select(`
+          id,
+          bank_platform_id,
+          account_number,
+          account_holder,
+          bank_platform:banks_platforms (
+            name,
+            currency_id
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      if (accountsData) setUserAccounts(accountsData as unknown as UserBankAccount[]);
+
+      setShowAddModal(false);
+    } catch (err: any) {
+      console.error('Error adding beneficiary:', err);
+      setError(err.message || 'Error al agregar beneficiario');
+    } finally {
+      setAddingBeneficiary(false);
+    }
   };
 
   // Submit transaction(s)
@@ -543,6 +705,16 @@ export default function OperacionesPage() {
                     </div>
                   );
                 })}
+
+                {/* Add new account button */}
+                <button
+                  type="button"
+                  onClick={openAddModal}
+                  className="w-full p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 text-gray-600 hover:text-blue-600"
+                >
+                  <Plus size={20} />
+                  <span className="font-medium">Agregar Nueva Cuenta</span>
+                </button>
               </div>
             )}
           </div>
@@ -792,6 +964,196 @@ export default function OperacionesPage() {
           )}
         </div>
       </div>
+
+      {/* Add Beneficiary Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Agregar Nueva Cuenta</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleAddBeneficiary} className="p-6 space-y-4">
+              {/* Bank/Platform Selection */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Banco / Plataforma <span className="text-red-500">*</span></label>
+                {availableBanks.length === 0 ? (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-700">
+                    No hay bancos disponibles para {getCurrency(toCurrencyId)?.code}
+                  </div>
+                ) : (
+                  <select
+                    value={newBeneficiaryForm.bank_platform_id}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, bank_platform_id: e.target.value, account_number: '' }))}
+                    className="input w-full"
+                    required
+                  >
+                    <option value="">Selecciona una opción</option>
+                    {availableBanks.map(bank => (
+                      <option key={bank.id} value={bank.id}>{bank.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Pago Móvil - Bank Code + Phone */}
+              {isPagoMovil && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">Banco (código) <span className="text-red-500">*</span></label>
+                    <select
+                      value={newBeneficiaryForm.account_number.slice(0, 4)}
+                      onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_number: e.target.value + prev.account_number.slice(4) }))}
+                      className="input w-full"
+                      required
+                    >
+                      <option value="">Selecciona banco</option>
+                      {venezuelanBanks.map(bank => (
+                        <option key={bank.code} value={bank.code}>{bank.code} - {bank.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">Número de Teléfono <span className="text-red-500">*</span></label>
+                    <input
+                      type="tel"
+                      value={newBeneficiaryForm.account_number.slice(4) || ''}
+                      onChange={(e) => {
+                        const bankCode = newBeneficiaryForm.account_number.slice(0, 4);
+                        setNewBeneficiaryForm(prev => ({ ...prev, account_number: bankCode + e.target.value.replace(/\D/g, '') }));
+                      }}
+                      className="input w-full font-mono"
+                      placeholder="04141234567"
+                      maxLength={11}
+                      required
+                    />
+                    <p className="text-xs text-gray-400">Número de 11 dígitos (04XX...)</p>
+                  </div>
+                </>
+              )}
+
+              {/* Digital Wallets (Phone-based) */}
+              {!isPagoMovil && isPhoneWallet && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Número de Teléfono <span className="text-red-500">*</span></label>
+                  <input
+                    type="tel"
+                    value={newBeneficiaryForm.account_number}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_number: e.target.value.replace(/\D/g, '') }))}
+                    className="input w-full font-mono"
+                    placeholder={toCurrencyCode === 'COP' ? '3001234567' : '912345678'}
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Digital Wallets (Email-based) */}
+              {!isPagoMovil && isDigitalWallet && !isPhoneWallet && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Correo Electrónico o ID <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newBeneficiaryForm.account_number}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_number: e.target.value }))}
+                    className="input w-full"
+                    placeholder="correo@ejemplo.com"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Regular Bank Account */}
+              {!isPagoMovil && !isDigitalWallet && newBeneficiaryForm.bank_platform_id && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Número de Cuenta <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newBeneficiaryForm.account_number}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_number: e.target.value }))}
+                    className="input w-full font-mono"
+                    placeholder={toCurrencyCode === 'VES' ? '01020000000000000000' : 'Número de cuenta'}
+                    required
+                  />
+                  {toCurrencyCode === 'VES' && <p className="text-xs text-gray-400">20 dígitos. Los primeros 4 son el código del banco.</p>}
+                </div>
+              )}
+
+              {/* Account Holder */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Nombre del Titular <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newBeneficiaryForm.account_holder}
+                  onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_holder: e.target.value }))}
+                  className="input w-full"
+                  placeholder="Nombre Apellido"
+                  required
+                />
+              </div>
+
+              {/* Document Type Selector */}
+              {documentTypesForCurrency.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Tipo de Documento</label>
+                  <select
+                    value={newBeneficiaryForm.document_type}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, document_type: e.target.value }))}
+                    className="input w-full"
+                  >
+                    <option value="">Seleccionar tipo</option>
+                    {documentTypesForCurrency.map(doc => (
+                      <option key={doc.value} value={doc.value}>{doc.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Document Number */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Número de Documento</label>
+                <input
+                  type="text"
+                  value={newBeneficiaryForm.document_number}
+                  onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, document_number: e.target.value }))}
+                  className="input w-full"
+                  placeholder="Ej: 12345678"
+                />
+              </div>
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-xl text-sm">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1">
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingBeneficiary || availableBanks.length === 0}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                >
+                  {addingBeneficiary ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={18} />
+                      Agregar Cuenta
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
