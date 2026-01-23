@@ -37,10 +37,15 @@ interface ExchangeRate {
 
 interface UserBankAccount {
   id: string;
-  bank_platform_id: number;
+  bank_id?: number;
+  bank_platform_id?: number;
   account_number: string;
   account_holder: string;
-  bank_platform: {
+  bank?: {
+    name: string;
+    currency_code: string;
+  };
+  bank_platform?: {
     name: string;
     currency_id: number;
   };
@@ -182,9 +187,14 @@ export default function OperacionesPage() {
         .from('user_bank_accounts')
         .select(`
           id,
+          bank_id,
           bank_platform_id,
           account_number,
           account_holder,
+          bank:banks (
+            name,
+            currency_code
+          ),
           bank_platform:banks_platforms (
             name,
             currency_id
@@ -230,10 +240,15 @@ export default function OperacionesPage() {
   // Get currency by ID
   const getCurrency = (id: number) => currencies.find(c => c.id === id);
 
-  // Filter accounts by destination currency
-  const filteredAccounts = userAccounts.filter(
-    acc => acc.bank_platform?.currency_id === toCurrencyId
-  );
+  // Filter accounts by destination currency (support both bank and bank_platform)
+  const filteredAccounts = userAccounts.filter(acc => {
+    // New records use bank.currency_code
+    if (acc.bank?.currency_code) {
+      return acc.bank.currency_code === toCurrencyCode;
+    }
+    // Old records use bank_platform.currency_id
+    return acc.bank_platform?.currency_id === toCurrencyId;
+  });
 
   // Get account by ID
   const getAccount = (id: string) => userAccounts.find(acc => acc.id === id);
@@ -689,7 +704,7 @@ export default function OperacionesPage() {
                           )}
                         </button>
                         <div className="flex-1 min-w-0" onClick={() => !isSelected && toggleBeneficiary(account.id)}>
-                          <p className="font-bold text-gray-900 truncate">{account.bank_platform?.name}</p>
+                          <p className="font-bold text-gray-900 truncate">{account.bank?.name || account.bank_platform?.name}</p>
                           <p className="text-sm text-gray-600 truncate">{account.account_holder}</p>
                           <p className="text-sm text-gray-500 font-mono truncate">{account.account_number}</p>
                         </div>
