@@ -345,8 +345,8 @@ export default function NewBeneficiaryPage() {
     loadData();
   }, []);
 
-  const availableBanks = banks.filter(b => b.currency_code === currentCurrencyCode);
   const currentCurrencyCode = currencies.find(c => c.id === selectedCurrency)?.code;
+  const availableBanks = banks.filter(b => b.currency_code === currentCurrencyCode);
 
   // Banco seleccionado actual
   const selectedBank = banks.find(b => b.id.toString() === formData.bank_id);
