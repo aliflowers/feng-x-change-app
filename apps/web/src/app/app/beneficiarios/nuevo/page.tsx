@@ -289,12 +289,13 @@ const DocumentTypeSelect = ({
   );
 };
 
-interface BankPlatform {
+interface Bank {
   id: number;
   name: string;
-  currency_id: number;
+  country_code: string;
+  currency_code: string;
   type: string;
-  bank_code: string | null;
+  code: string | null;
 }
 
 interface Currency {
@@ -311,12 +312,12 @@ export default function NewBeneficiaryPage() {
 
   // Catalogs
   const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [banks, setBanks] = useState<BankPlatform[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
 
   // Form State
   const [selectedCurrency, setSelectedCurrency] = useState<number>(0);
   const [formData, setFormData] = useState({
-    bank_platform_id: '',
+    bank_id: '',
     account_number: '',
     account_holder: '',
     document_type: '', // Tipo de documento
@@ -333,7 +334,7 @@ export default function NewBeneficiaryPage() {
         const { data: curData } = await supabase.from('currencies').select('*').order('id');
         if (curData) setCurrencies(curData);
 
-        const { data: bankData } = await supabase.from('banks_platforms').select('id, name, currency_id, type, bank_code').eq('is_active', true);
+        const { data: bankData } = await supabase.from('banks').select('id, name, country_code, currency_code, type, code').eq('is_active', true);
         if (bankData) setBanks(bankData);
       } catch (error) {
         console.error('Error loading catalogs:', error);
@@ -344,11 +345,11 @@ export default function NewBeneficiaryPage() {
     loadData();
   }, []);
 
-  const availableBanks = banks.filter(b => b.currency_id === selectedCurrency);
+  const availableBanks = banks.filter(b => b.currency_code === currentCurrencyCode);
   const currentCurrencyCode = currencies.find(c => c.id === selectedCurrency)?.code;
 
   // Banco seleccionado actual
-  const selectedBank = banks.find(b => b.id.toString() === formData.bank_platform_id);
+  const selectedBank = banks.find(b => b.id.toString() === formData.bank_id);
   const isPagoMovil = selectedBank?.name === 'Pago Móvil';
   const isDigitalWallet = ['Nequi', 'DaviPlata', 'Yape', 'Plin', 'Zinli', 'Binance Pay', 'PayPal', 'Zelle', 'Venmo', 'CashApp'].includes(selectedBank?.name || '');
 
@@ -357,7 +358,7 @@ export default function NewBeneficiaryPage() {
 
     // Base Validation using Shared Schema
     const result = createUserBankAccountSchema.safeParse({
-      bank_platform_id: parseInt(formData.bank_platform_id),
+      bank_platform_id: parseInt(formData.bank_id) || 1, // Temporary - schema still expects bank_platform_id
       account_number: formData.account_number,
       account_holder: formData.account_holder,
       document_number: formData.document_number,
@@ -378,7 +379,7 @@ export default function NewBeneficiaryPage() {
       if (!vesCheck.success) newErrors.account_number = vesCheck.error.errors[0].message;
 
       // Validate bank code match
-      const selectedBank = banks.find(b => b.id.toString() === formData.bank_platform_id);
+      const selectedBank = banks.find(b => b.id.toString() === formData.bank_id);
       if (selectedBank) {
         // Logic to check if account starts with bank code could be added here if we had bank codes
       }
@@ -409,7 +410,7 @@ export default function NewBeneficiaryPage() {
       // Prepare payload
       const payload = {
         user_id: user.id,
-        bank_platform_id: parseInt(formData.bank_platform_id),
+        bank_id: parseInt(formData.bank_id),
         account_number: formData.account_number,
         account_holder: formData.account_holder,
         document_type: formData.document_type || null,
@@ -439,16 +440,16 @@ export default function NewBeneficiaryPage() {
     const { name, value } = e.target;
 
     // Si cambia el banco, actualizar prefijo de cuenta para bancos VES
-    if (name === 'bank_platform_id' && value) {
+    if (name === 'bank_id' && value) {
       const bank = banks.find(b => b.id.toString() === value);
-      if (bank?.bank_code && currentCurrencyCode === 'VES') {
+      if (bank?.code && currentCurrencyCode === 'VES') {
         // Agregar prefijo automático solo si el campo está vacío o tiene un prefijo anterior
         setFormData(prev => {
           const currentAccount = prev.account_number;
           // Si está vacío o empieza con 4 dígitos que son un código de banco conocido
-          const startsWithBankCode = banks.some(b => b.bank_code && currentAccount.startsWith(b.bank_code));
+          const startsWithBankCode = banks.some(b => b.code && currentAccount.startsWith(b.code));
           if (currentAccount === '' || startsWithBankCode) {
-            return { ...prev, [name]: value, account_number: bank.bank_code + currentAccount.slice(4) };
+            return { ...prev, [name]: value, account_number: bank.code + currentAccount.slice(4) };
           }
           return { ...prev, [name]: value };
         });
@@ -498,7 +499,7 @@ export default function NewBeneficiaryPage() {
                   <button
                     key={currency.id}
                     type="button"
-                    onClick={() => { setSelectedCurrency(currency.id); setFormData(prev => ({ ...prev, bank_platform_id: '' })); setErrors({}); }}
+                    onClick={() => { setSelectedCurrency(currency.id); setFormData(prev => ({ ...prev, bank_id: '' })); setErrors({}); }}
                     className={`relative group flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all duration-300 bg-white ${isSelected
                       ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg'
                       : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
@@ -547,10 +548,10 @@ export default function NewBeneficiaryPage() {
                     <div className="space-y-2">
                       <div className="relative">
                         <select
-                          name="bank_platform_id"
-                          value={formData.bank_platform_id}
+                          name="bank_id"
+                          value={formData.bank_id}
                           onChange={handleChange}
-                          className={`input appearance-none w-full pl-10 ${errors.bank_platform_id ? 'border-red-500 focus:ring-red-200' : ''}`}
+                          className={`input appearance-none w-full pl-10 ${errors.bank_id ? 'border-red-500 focus:ring-red-200' : ''}`}
                           required
                         >
                           <option value="">Selecciona una opción</option>
@@ -570,7 +571,7 @@ export default function NewBeneficiaryPage() {
                       </button>
                     </div>
                   )}
-                  {errors.bank_platform_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_platform_id}</p>}
+                  {errors.bank_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_id}</p>}
                 </div>
 
                 {/* Campos dinámicos según tipo de plataforma */}
@@ -588,8 +589,8 @@ export default function NewBeneficiaryPage() {
                           required
                         >
                           <option value="">Selecciona banco</option>
-                          {banks.filter(b => b.currency_id === selectedCurrency && b.bank_code).map(bank => (
-                            <option key={bank.id} value={bank.bank_code!}>{bank.bank_code} - {bank.name}</option>
+                          {banks.filter(b => b.currency_code === currentCurrencyCode && b.code).map(bank => (
+                            <option key={bank.id} value={bank.code!}>{bank.code} - {bank.name}</option>
                           ))}
                         </select>
                         <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />

@@ -46,12 +46,13 @@ interface UserBankAccount {
   };
 }
 
-interface BankPlatform {
+interface Bank {
   id: number;
   name: string;
-  currency_id: number;
+  country_code: string;
+  currency_code: string;
   type: string;
-  bank_code: string | null;
+  code: string | null;
 }
 
 interface SelectedBeneficiary {
@@ -143,10 +144,10 @@ export default function OperacionesPage() {
 
   // Add beneficiary modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [banks, setBanks] = useState<BankPlatform[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
   const [addingBeneficiary, setAddingBeneficiary] = useState(false);
   const [newBeneficiaryForm, setNewBeneficiaryForm] = useState({
-    bank_platform_id: '',
+    bank_id: '',
     account_number: '',
     account_holder: '',
     document_type: '',
@@ -194,8 +195,8 @@ export default function OperacionesPage() {
 
       // Load banks for add modal
       const { data: banksData } = await supabase
-        .from('banks_platforms')
-        .select('id, name, currency_id, type, bank_code')
+        .from('banks')
+        .select('id, name, country_code, currency_code, type, code')
         .eq('is_active', true);
 
       if (currenciesData) setCurrencies(currenciesData);
@@ -297,16 +298,16 @@ export default function OperacionesPage() {
     setProofPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Banks available for the selected destination currency
-  const availableBanks = banks.filter(b => b.currency_id === toCurrencyId);
-
   // Current currency code and country
   const toCurrencyCode = getCurrency(toCurrencyId)?.code || '';
   const toCountryCode = currencyToCountryMap[toCurrencyCode] || 'VE';
   const documentTypesForCurrency = documentTypesByCountry[toCountryCode] || [];
 
+  // Banks available for the selected destination currency
+  const availableBanks = banks.filter(b => b.currency_code === toCurrencyCode);
+
   // Selected bank detection for dynamic form
-  const selectedBankForModal = banks.find(b => b.id.toString() === newBeneficiaryForm.bank_platform_id);
+  const selectedBankForModal = banks.find(b => b.id.toString() === newBeneficiaryForm.bank_id);
   const isPagoMovil = selectedBankForModal?.name === 'Pago Móvil';
   const isDigitalWallet = digitalWallets.includes(selectedBankForModal?.name || '');
   const isPhoneWallet = phoneWallets.includes(selectedBankForModal?.name || '');
@@ -314,7 +315,7 @@ export default function OperacionesPage() {
   // Reset and open modal
   const openAddModal = () => {
     setNewBeneficiaryForm({
-      bank_platform_id: '',
+      bank_id: '',
       account_number: '',
       account_holder: '',
       document_type: '',
@@ -327,7 +328,7 @@ export default function OperacionesPage() {
   // Handle add beneficiary from modal
   const handleAddBeneficiary = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBeneficiaryForm.bank_platform_id || !newBeneficiaryForm.account_number || !newBeneficiaryForm.account_holder) {
+    if (!newBeneficiaryForm.bank_id || !newBeneficiaryForm.account_number || !newBeneficiaryForm.account_holder) {
       setError('Completa todos los campos obligatorios');
       return;
     }
@@ -341,7 +342,7 @@ export default function OperacionesPage() {
 
       const payload = {
         user_id: user.id,
-        bank_platform_id: parseInt(newBeneficiaryForm.bank_platform_id),
+        bank_id: parseInt(newBeneficiaryForm.bank_id),
         account_number: newBeneficiaryForm.account_number,
         account_holder: newBeneficiaryForm.account_holder,
         document_type: newBeneficiaryForm.document_type || null,
@@ -986,8 +987,8 @@ export default function OperacionesPage() {
                   </div>
                 ) : (
                   <select
-                    value={newBeneficiaryForm.bank_platform_id}
-                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, bank_platform_id: e.target.value, account_number: '' }))}
+                    value={newBeneficiaryForm.bank_id}
+                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, bank_id: e.target.value, account_number: '' }))}
                     className="input w-full"
                     required
                   >
@@ -1066,7 +1067,7 @@ export default function OperacionesPage() {
               )}
 
               {/* Regular Bank Account */}
-              {!isPagoMovil && !isDigitalWallet && newBeneficiaryForm.bank_platform_id && (
+              {!isPagoMovil && !isDigitalWallet && newBeneficiaryForm.bank_id && (
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700">Número de Cuenta <span className="text-red-500">*</span></label>
                   <input
