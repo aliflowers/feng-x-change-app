@@ -242,6 +242,32 @@
   .skeleton {
     @apply animate-pulse bg-gray-200 rounded;
   }
+
+  /* Mobile-friendly select - uses native picker on mobile */
+  .select-mobile {
+    @apply w-full px-4 py-3 bg-bg-form border border-gray-200;
+    @apply rounded-input text-text-dark;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary;
+    @apply transition-all duration-200;
+  }
+
+  /* On mobile, use native select picker for better UX with long lists */
+  @media (max-width: 640px) {
+    select.input {
+      /* Use native picker on mobile for better UX */
+      -webkit-appearance: menulist;
+      -moz-appearance: menulist;
+      appearance: menulist;
+      padding-right: 2rem;
+    }
+
+    /* Modal improvements for mobile */
+    .modal-mobile-friendly {
+      max-height: 85vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 }
 
 /* ============================================
