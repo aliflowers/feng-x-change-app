@@ -42,7 +42,8 @@ interface PoolOperation {
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { id: number; name: string };
+    bank_platform: { id: number; name: string } | null;
+    bank?: { id: number; name: string } | null;
   } | null;
   taken_by_profile: { first_name: string; last_name: string } | null;
 }
@@ -145,7 +146,8 @@ export default function PoolPage() {
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(id, name)
+            bank_platform:banks_platforms(id, name),
+            bank:banks(id, name)
           ),
           taken_by_profile:profiles!transactions_taken_by_fkey(first_name, last_name)
         `)
@@ -436,7 +438,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             <Building2 size={14} className="text-slate-400" />
                             <div>
                               <p className="text-sm font-medium text-slate-700">
-                                {op.user_bank_account.bank_platform?.name}
+                                {op.user_bank_account.bank_platform?.name || op.user_bank_account.bank?.name}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {op.user_bank_account.account_holder}
@@ -593,7 +595,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                 {selectedOperation.user_bank_account && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Banco destino:</span>
-                    <span className="font-medium">{selectedOperation.user_bank_account.bank_platform?.name}</span>
+                    <span className="font-medium">{selectedOperation.user_bank_account.bank_platform?.name || selectedOperation.user_bank_account.bank?.name}</span>
                   </div>
                 )}
               </div>
@@ -685,11 +687,11 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   <div>
                     <p className="text-xs text-slate-500">Banco</p>
                     <p className="font-bold text-slate-800">
-                      {takenOperation.user_bank_account?.bank_platform?.name || 'N/A'}
+                      {takenOperation.user_bank_account?.bank_platform?.name || takenOperation.user_bank_account?.bank?.name || 'N/A'}
                     </p>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank_platform?.name || '', 'bank')}
+                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank_platform?.name || takenOperation.user_bank_account?.bank?.name || '', 'bank')}
                     className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
                     title="Copiar"
                   >

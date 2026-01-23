@@ -50,7 +50,8 @@ interface CompletedOperation {
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { id: number; name: string };
+    bank_platform: { id: number; name: string } | null;
+    bank?: { id: number; name: string } | null;
   } | null;
   taken_by_profile: {
     id: string;
@@ -178,7 +179,8 @@ export default function OperacionesPage() {
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(id, name)
+            bank_platform:banks_platforms(id, name),
+            bank:banks(id, name)
           ),
           taken_by_profile:profiles!transactions_taken_by_fkey(id, first_name, last_name, role)
         `, { count: 'exact' })
@@ -605,7 +607,7 @@ export default function OperacionesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-700">
-                          {op.user_bank_account?.bank_platform?.name || 'N/A'}
+                          {op.user_bank_account?.bank_platform?.name || op.user_bank_account?.bank?.name || 'N/A'}
                         </span>
                       </td>
                       <td className="px-4 py-3">

@@ -175,6 +175,7 @@ export default function ClientesPage() {
           user_bank_account:user_bank_accounts!transactions_user_bank_account_id_fkey(
             account_holder,
             account_number,
+            bank:banks(name, type),
             bank_platform:banks_platforms(name, type)
           )
         `)
@@ -193,6 +194,7 @@ export default function ClientesPage() {
           to_currency: Array.isArray(t.to_currency) ? t.to_currency[0] : t.to_currency,
           user_bank_account: userBankAccount ? {
             ...userBankAccount,
+            bank: Array.isArray(userBankAccount.bank) ? userBankAccount.bank[0] : userBankAccount.bank,
             bank_platform: Array.isArray(userBankAccount.bank_platform) ? userBankAccount.bank_platform[0] : userBankAccount.bank_platform
           } : null
         };
@@ -219,6 +221,7 @@ export default function ClientesPage() {
           document_number,
           is_active,
           created_at,
+          bank:banks(id, name, type),
           bank_platform:banks_platforms(id, name, type)
         `)
         .eq('user_id', clientId)
@@ -234,9 +237,9 @@ export default function ClientesPage() {
         throw error;
       }
 
-      // Transform data
       const transformed = (data || []).map(b => ({
         ...b,
+        bank: Array.isArray(b.bank) ? b.bank[0] : b.bank,
         bank_platform: Array.isArray(b.bank_platform) ? b.bank_platform[0] : b.bank_platform,
       }));
 
@@ -846,7 +849,7 @@ export default function ClientesPage() {
                                     {t.user_bank_account.account_holder}
                                   </p>
                                   <p className="text-xs text-slate-500 truncate max-w-[150px]">
-                                    {t.user_bank_account.bank_platform?.name || 'Banco'}
+                                    {t.user_bank_account.bank?.name || t.user_bank_account.bank_platform?.name || 'Banco'}
                                   </p>
                                 </div>
                               ) : (
@@ -934,7 +937,7 @@ export default function ClientesPage() {
                               {beneficiary.account_holder}
                             </p>
                             <p className="text-sm text-slate-600">
-                              {beneficiary.bank_platform?.name || 'Banco no especificado'}
+                              {beneficiary.bank?.name || beneficiary.bank_platform?.name || 'Banco no especificado'}
                             </p>
                           </div>
                         </div>
@@ -974,14 +977,14 @@ export default function ClientesPage() {
                         </div>
 
                         {/* Bank Type */}
-                        {beneficiary.bank_platform?.type && (
+                        {(beneficiary.bank?.type || beneficiary.bank_platform?.type) && (
                           <div className="bg-white rounded-lg p-3 border border-slate-200">
                             <div className="flex items-center gap-2 text-slate-500 mb-1">
                               <Building2 size={14} />
                               <span className="text-xs font-medium">Tipo</span>
                             </div>
                             <p className="font-medium text-slate-700">
-                              {beneficiary.bank_platform.type}
+                              {beneficiary.bank?.type || beneficiary.bank_platform?.type}
                             </p>
                           </div>
                         )}

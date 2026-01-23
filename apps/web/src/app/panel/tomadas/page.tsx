@@ -35,7 +35,8 @@ interface TakenOperation {
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { name: string };
+    bank_platform: { name: string } | null;
+    bank?: { name: string } | null;
   } | null;
 }
 
@@ -115,7 +116,8 @@ export default function TomadasPage() {
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(name)
+            bank_platform:banks_platforms(name),
+            bank:banks(name)
           )
         `)
         .eq('status', 'TAKEN')
@@ -341,7 +343,7 @@ export default function TomadasPage() {
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Beneficiario</p>
                       <p className="font-medium text-slate-800">{op.user_bank_account?.account_holder || 'N/A'}</p>
-                      <p className="text-xs text-slate-500">{op.user_bank_account?.bank_platform?.name || 'N/A'}</p>
+                      <p className="text-xs text-slate-500">{op.user_bank_account?.bank_platform?.name || op.user_bank_account?.bank?.name || 'N/A'}</p>
                     </div>
 
                     {/* Countdown Timer */}
@@ -440,9 +442,9 @@ export default function TomadasPage() {
               <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
                 <div>
                   <p className="text-xs text-slate-500">Banco</p>
-                  <p className="font-bold text-slate-800">{selectedOperation.user_bank_account?.bank_platform?.name || 'N/A'}</p>
+                  <p className="font-bold text-slate-800">{selectedOperation.user_bank_account?.bank_platform?.name || selectedOperation.user_bank_account?.bank?.name || 'N/A'}</p>
                 </div>
-                <button onClick={() => copyToClipboard(selectedOperation.user_bank_account?.bank_platform?.name || '', 'bank')} className="p-2 hover:bg-slate-200 rounded-lg">
+                <button onClick={() => copyToClipboard(selectedOperation.user_bank_account?.bank_platform?.name || selectedOperation.user_bank_account?.bank?.name || '', 'bank')} className="p-2 hover:bg-slate-200 rounded-lg">
                   {copiedField === 'bank' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
                 </button>
               </div>
