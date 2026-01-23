@@ -240,15 +240,6 @@ export default function OperacionesPage() {
   // Get currency by ID
   const getCurrency = (id: number) => currencies.find(c => c.id === id);
 
-  // Filter accounts by destination currency (support both bank and bank_platform)
-  const filteredAccounts = userAccounts.filter(acc => {
-    // New records use bank.currency_code
-    if (acc.bank?.currency_code) {
-      return acc.bank.currency_code === toCurrencyCode;
-    }
-    // Old records use bank_platform.currency_id
-    return acc.bank_platform?.currency_id === toCurrencyId;
-  });
 
   // Get account by ID
   const getAccount = (id: string) => userAccounts.find(acc => acc.id === id);
@@ -320,6 +311,16 @@ export default function OperacionesPage() {
 
   // Banks available for the selected destination currency
   const availableBanks = banks.filter(b => b.currency_code === toCurrencyCode);
+
+  // Filter accounts by destination currency (support both bank and bank_platform)
+  const filteredAccounts = userAccounts.filter(acc => {
+    // New records use bank.currency_code
+    if (acc.bank?.currency_code) {
+      return acc.bank.currency_code === toCurrencyCode;
+    }
+    // Old records use bank_platform.currency_id
+    return acc.bank_platform?.currency_id === toCurrencyId;
+  });
 
   // Selected bank detection for dynamic form
   const selectedBankForModal = banks.find(b => b.id.toString() === newBeneficiaryForm.bank_id);
