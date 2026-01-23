@@ -63,9 +63,17 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (profile) {
-      // Client/Affiliate no puede acceder a /panel
-      if ((profile.role === 'CLIENT' || profile.role === 'AFFILIATE') && pathname.startsWith('/panel')) {
-        return NextResponse.redirect(new URL('/app', request.url));
+      const internalRoles = ['CAJERO', 'ADMIN', 'SUPER_ADMIN'];
+      const clientRoles = ['CLIENT', 'AFFILIATE'];
+
+      // Usuarios internos NO pueden acceder a /app (área de clientes)
+      if (internalRoles.includes(profile.role) && pathname.startsWith('/app')) {
+        return NextResponse.redirect(new URL('/panel/dashboard', request.url));
+      }
+
+      // Clientes NO pueden acceder a /panel (área de administración)
+      if (clientRoles.includes(profile.role) && pathname.startsWith('/panel')) {
+        return NextResponse.redirect(new URL('/app/operaciones', request.url));
       }
     }
   }

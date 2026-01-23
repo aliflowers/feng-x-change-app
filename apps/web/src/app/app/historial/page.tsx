@@ -53,7 +53,6 @@ interface TransactionWithDetails {
   user_bank_account?: {
     account_holder: string;
     account_number: string;
-    bank?: { name: string };
     bank_platform?: { name: string };
   };
 }
@@ -145,7 +144,6 @@ export default function HistoryPage() {
           user_bank_account:user_bank_accounts(
             account_holder,
             account_number,
-            bank:banks(name),
             bank_platform:banks_platforms(name)
           )
         `)
@@ -350,7 +348,7 @@ export default function HistoryPage() {
                           {tx.user_bank_account?.account_holder || '-'}
                         </p>
                         <p className="text-xs text-gray-500 truncate max-w-[150px]">
-                          {tx.user_bank_account?.bank?.name || tx.user_bank_account?.bank_platform?.name || '-'}
+                          {tx.user_bank_account?.bank_platform?.name || '-'}
                         </p>
                       </td>
                       <td className="px-6 py-4">
@@ -605,7 +603,7 @@ export default function HistoryPage() {
                       <p className="font-bold text-gray-900">{selectedTransaction.user_bank_account?.account_holder || 'No especificado'}</p>
                       <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
                         <Building size={14} className="text-gray-400" />
-                        {selectedTransaction.user_bank_account?.bank?.name || selectedTransaction.user_bank_account?.bank_platform?.name || 'Banco no especificado'}
+                        {selectedTransaction.user_bank_account?.bank_platform?.name || 'Banco no especificado'}
                       </div>
                       <p className="text-sm text-gray-500 font-mono mt-1">
                         {selectedTransaction.user_bank_account?.account_number || 'Sin número de cuenta'}
