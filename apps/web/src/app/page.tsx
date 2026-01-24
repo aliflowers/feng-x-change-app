@@ -236,12 +236,11 @@ export default function HomePage() {
     <>
       {/* Ticker de Tasas - Sticky */}
       <div className="sticky top-0 z-[60] bg-gradient-to-r from-[#05294F] to-[#07478F] py-2 overflow-hidden min-h-[48px]">
-        {loadingRates ? (
-          <div className="flex justify-center text-white/50 text-xs animate-pulse">Cargando tasas en tiempo real...</div>
-        ) : (
-          <div className="animate-marquee whitespace-nowrap flex items-center gap-12 w-max">
-            {[...exchangeRates, ...exchangeRates].map((rate, i) => (
-              <span key={i} className="inline-flex items-center gap-2 text-white/90 text-sm">
+        <div className="animate-marquee whitespace-nowrap flex w-max">
+          {/* Primer bloque original */}
+          <div className="flex items-center gap-12 pr-12">
+            {exchangeRates.map((rate, i) => (
+              <span key={`original-${i}`} className="inline-flex items-center gap-2 text-white/90 text-sm">
                 <CountryFlag code={rate.from_currency.code} size={20} />
                 <span className="font-semibold">{rate.from_currency.name}</span>
                 <ArrowRight size={16} className="text-amber-400 flex-shrink-0" />
@@ -254,7 +253,23 @@ export default function HomePage() {
               </span>
             ))}
           </div>
-        )}
+          {/* Segundo bloque copia para efecto infinito */}
+          <div className="flex items-center gap-12 pr-12">
+            {exchangeRates.map((rate, i) => (
+              <span key={`copy-${i}`} className="inline-flex items-center gap-2 text-white/90 text-sm">
+                <CountryFlag code={rate.from_currency.code} size={20} />
+                <span className="font-semibold">{rate.from_currency.name}</span>
+                <ArrowRight size={16} className="text-amber-400 flex-shrink-0" />
+                <CountryFlag code={rate.to_currency.code} size={20} />
+                <span className="font-semibold">{rate.to_currency.name}</span>
+                <span className="text-amber-400 font-bold">
+                  {rate.to_currency.symbol} {formatNumber(rate.rate, rate.rate < 1 ? 4 : 2)}
+                </span>
+                <span className="text-white/30 mx-4">|</span>
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       <main className="min-h-screen overflow-x-hidden">
