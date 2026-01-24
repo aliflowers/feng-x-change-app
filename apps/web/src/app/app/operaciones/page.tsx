@@ -220,6 +220,31 @@ export default function OperacionesPage() {
     }
   };
 
+  // Filtrar monedas de origen disponibles (solo las que tienen tasas activas configuradas como origen)
+  const availableFromCurrencies = currencies.filter(c =>
+    exchangeRates.some(r => r.from_currency_id === c.id)
+  );
+
+  // Filtrar monedas de destino disponibles (basado en el origen seleccionado)
+  const availableToCurrencies = currencies.filter(c =>
+    exchangeRates.some(r => r.from_currency_id === fromCurrencyId && r.to_currency_id === c.id)
+  );
+
+  // Efecto para ajustar monedas si la selección actual no es válida
+  useEffect(() => {
+    // Si la moneda origen actual no está disponible, seleccionar la primera disponible
+    if (availableFromCurrencies.length > 0 && !availableFromCurrencies.find(c => c.id === fromCurrencyId)) {
+      setFromCurrencyId(availableFromCurrencies[0].id);
+    }
+  }, [availableFromCurrencies, fromCurrencyId]);
+
+  useEffect(() => {
+    // Si la moneda destino actual no está disponible para este origen, seleccionar la primera disponible
+    if (availableToCurrencies.length > 0 && !availableToCurrencies.find(c => c.id === toCurrencyId)) {
+      setToCurrencyId(availableToCurrencies[0].id);
+    }
+  }, [fromCurrencyId, availableToCurrencies, toCurrencyId]);
+
   // Get current rate
   const getCurrentRate = useCallback(() => {
     const rate = exchangeRates.find(
@@ -571,7 +596,7 @@ export default function OperacionesPage() {
                 onChange={(e) => setFromCurrencyId(parseInt(e.target.value))}
                 className="input"
               >
-                {currencies.map(currency => (
+                {availableFromCurrencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
                     {currency.symbol} {currency.code} - {currency.name}
                   </option>
@@ -621,7 +646,7 @@ export default function OperacionesPage() {
                 }}
                 className="input"
               >
-                {currencies.map(currency => (
+                {availableToCurrencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
                     {currency.symbol} {currency.code} - {currency.name}
                   </option>
