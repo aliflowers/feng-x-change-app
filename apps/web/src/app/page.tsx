@@ -239,7 +239,7 @@ export default function HomePage() {
         {loadingRates ? (
           <div className="flex justify-center text-white/50 text-xs animate-pulse">Cargando tasas en tiempo real...</div>
         ) : (
-          <div className="animate-marquee whitespace-nowrap flex items-center gap-12">
+          <div className="animate-marquee whitespace-nowrap flex items-center gap-12 w-max">
             {[...exchangeRates, ...exchangeRates].map((rate, i) => (
               <span key={i} className="inline-flex items-center gap-2 text-white/90 text-sm">
                 <CountryFlag code={rate.from_currency.code} size={20} />
