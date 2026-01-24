@@ -90,7 +90,8 @@ export default function HomePage() {
             from_currency:currencies!exchange_rates_from_currency_id_fkey(code, name, symbol),
             to_currency:currencies!exchange_rates_to_currency_id_fkey(code, name, symbol)
           `)
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .order('id', { ascending: true });
 
         if (error) throw error;
 
