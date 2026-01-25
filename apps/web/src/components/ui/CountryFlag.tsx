@@ -31,6 +31,7 @@ export const CountryFlag = ({ code, size = 48, className = '' }: CountryFlagProp
   CL: '/flags/cl.svg',
   PA: '/flags/pa.svg',
   US: '/flags/us.svg',
+  EU: '/flags/eu.svg',
  };
 
  // Si es una bandera de país, usar Image con el archivo SVG
@@ -50,12 +51,6 @@ export const CountryFlag = ({ code, size = 48, className = '' }: CountryFlagProp
 
  // Iconos de plataformas de pago
  const platformIcons: Record<string, React.ReactNode> = {
-  EU: (
-   <svg viewBox="0 0 60 40" width={size} height={size * 0.67} className="rounded shadow">
-    <rect fill="#003399" width="60" height="40" />
-    <circle cx="30" cy="20" r="10" fill="none" stroke="#FFCC00" strokeWidth="2" />
-   </svg>
-  ),
   PAYPAL: (
    <div style={{ width: size, height: size * 0.67 }} className="rounded shadow bg-[#003087] flex items-center justify-center">
     <span className="text-white font-bold" style={{ fontSize: size * 0.35 }}>P</span>

@@ -411,9 +411,10 @@ export default function OperacionesPage() {
       if (accountsData) setUserAccounts(accountsData as unknown as UserBankAccount[]);
 
       setShowAddModal(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error adding beneficiary:', err);
-      setError(err.message || 'Error al agregar beneficiario');
+      const errorMessage = err instanceof Error ? err.message : 'Error al agregar beneficiario';
+      setError(errorMessage);
     } finally {
       setAddingBeneficiary(false);
     }
@@ -485,9 +486,10 @@ export default function OperacionesPage() {
         router.push('/app/historial');
       }, 3000);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating transaction:', err);
-      setError(err.message || 'Error al crear la operación');
+      const errorMessage = err instanceof Error ? err.message : 'Error al crear la operación';
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }

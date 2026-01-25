@@ -224,8 +224,7 @@ export default function OperacionesPage() {
       if (error) throw error;
 
       // Transform Supabase data to extract first element from arrays (one-to-one relations)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let transformedData: any[] = (data || []).map(op => ({
+      let transformedData = (data || []).map(op => ({
         ...op,
         from_currency: Array.isArray(op.from_currency) ? op.from_currency[0] : op.from_currency,
         to_currency: Array.isArray(op.to_currency) ? op.to_currency[0] : op.to_currency,
@@ -269,13 +268,13 @@ export default function OperacionesPage() {
     } catch (error) {
       console.error('Error loading operations:', error);
       if (error && typeof error === 'object' && 'message' in error) {
-        console.error('Error message:', (error as any).message);
+        console.error('Error message:', (error as Record<string, unknown>).message);
       }
       if (error && typeof error === 'object' && 'details' in error) {
-        console.error('Error details:', (error as any).details);
+        console.error('Error details:', (error as Record<string, unknown>).details);
       }
       if (error && typeof error === 'object' && 'hint' in error) {
-        console.error('Error hint:', (error as any).hint);
+        console.error('Error hint:', (error as Record<string, unknown>).hint);
       }
     } finally {
       setLoading(false);

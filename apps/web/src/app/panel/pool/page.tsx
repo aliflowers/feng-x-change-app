@@ -19,7 +19,8 @@ import {
   Building2,
   Copy,
   Check,
-  ArrowRight
+  ArrowRight,
+  type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -53,7 +54,7 @@ interface Currency {
   name: string;
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any; bgColor: string }> = {
+const statusConfig: Record<string, { label: string; color: string; icon: LucideIcon; bgColor: string }> = {
   POOL: { label: 'En Pool', color: 'text-blue-600', icon: Inbox, bgColor: 'bg-blue-100' },
   TAKEN: { label: 'Tomada', color: 'text-amber-600', icon: Clock, bgColor: 'bg-amber-100' },
   VERIFYING: { label: 'Verificando', color: 'text-purple-600', icon: Eye, bgColor: 'bg-purple-100' },

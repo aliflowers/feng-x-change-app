@@ -343,9 +343,10 @@ export default function BancosPage() {
 
       await loadBanks();
       setTimeout(() => setShowModal(false), 1500);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving bank:', error);
-      setMessage({ type: 'error', text: error.message || 'Error al guardar' });
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar';
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
     }

@@ -276,9 +276,14 @@ export default function ProfilePage() {
         throw error;
       }
       setMessage({ type: 'success', text: '¡Perfil actualizado correctamente!' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating profile:', error);
-      const errorMessage = error.message || error.details || 'Error al actualizar el perfil';
+      let errorMessage = 'Error al actualizar el perfil';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'details' in error) {
+        errorMessage = String((error as Record<string, unknown>).details);
+      }
       setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
@@ -310,9 +315,10 @@ export default function ProfilePage() {
 
       setMessage({ type: 'success', text: '¡Contraseña actualizada correctamente!' });
       setPasswordForm({ current: '', new: '', confirm: '' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error changing password:', error);
-      setMessage({ type: 'error', text: error.message || 'Error al cambiar la contraseña' });
+      const errorMessage = error instanceof Error ? error.message : 'Error al cambiar la contraseña';
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setChangingPassword(false);
     }

@@ -55,6 +55,16 @@ interface UserStatus {
   offline: number;
 }
 
+interface DelayedOperationResponse {
+  id: string;
+  transaction_number: string;
+  taken_at: string;
+  taken_by: {
+    first_name: string;
+    last_name: string;
+  }[];
+}
+
 export default function PanelDashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     poolCount: 0,
@@ -156,11 +166,11 @@ export default function PanelDashboard() {
           .limit(5);
 
         if (delayedOps) {
-          const delayed: DelayedPayment[] = delayedOps.map((op: any) => ({
+          const delayed: DelayedPayment[] = delayedOps.map((op: DelayedOperationResponse) => ({
             id: op.id,
             transaction_number: op.transaction_number || `OP-${op.id.slice(0, 8)}`,
             taken_at: op.taken_at,
-            taken_by_name: op.taken_by ? `${op.taken_by.first_name} ${op.taken_by.last_name}` : 'Desconocido',
+            taken_by_name: op.taken_by?.[0] ? `${op.taken_by[0].first_name} ${op.taken_by[0].last_name}` : 'Desconocido',
             minutes_delayed: Math.floor((Date.now() - new Date(op.taken_at).getTime()) / 60000),
           }));
           setDelayedPayments(delayed);
