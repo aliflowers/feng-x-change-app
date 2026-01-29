@@ -16,6 +16,9 @@ export const CountryFlag = ({ code, size = 48, className = '' }: CountryFlagProp
   'PAB': 'PA',
   'USD': 'US',
   'EUR': 'EU',
+  'PAYPAL': 'PAYPAL',
+  'ZINLI': 'ZINLI',
+  'USDT': 'USDT',
   // Mapeos directos si el código ya es de país (para el ticker)
   'VE': 'VE', 'CO': 'CO', 'PE': 'PE', 'CL': 'CL', 'PA': 'PA', 'US': 'US', 'EU': 'EU'
  };
@@ -32,6 +35,9 @@ export const CountryFlag = ({ code, size = 48, className = '' }: CountryFlagProp
   PA: '/flags/pa.svg',
   US: '/flags/us.svg',
   EU: '/flags/eu.svg',
+  PAYPAL: '/flags/PayPal.svg',
+  ZINLI: '/flags/Zinli.jpg',
+  USDT: '/flags/usdt.svg',
  };
 
  // Si es una bandera de país, usar Image con el archivo SVG

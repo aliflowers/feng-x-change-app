@@ -32,8 +32,14 @@ const countryFlags: Record<string, string> = {
   'PEN': '/flags/pe.svg',
   'CLP': '/flags/cl.svg',
   'PAB': '/flags/pa.svg',
-  'EUR': '/flags/eu.svg', // Asumiendo que existe o usando fallback
+  'EUR': '/flags/eu.svg',
+  'PAYPAL': '/flags/PayPal.svg',
+  'ZINLI': '/flags/Zinli.jpg',
+  'USDT': '/flags/usdt.svg',
 };
+
+// Códigos que no muestran texto (solo icono)
+const hideTextCodes: string[] = [];
 
 const CountryFlag = ({ code, size = 24 }: { code: string; size?: number }) => {
   const flagPath = countryFlags[code];
@@ -227,7 +233,7 @@ export default function TasasPage() {
                 }`}
             >
               <CountryFlag code={code} size={18} />
-              {code}
+              {!hideTextCodes.includes(code) && code}
             </button>
           ))}
         </div>
