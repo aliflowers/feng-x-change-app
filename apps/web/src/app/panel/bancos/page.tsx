@@ -207,12 +207,6 @@ const parseFormattedNumber = (formatted: string): string => {
   return cleaned;
 };
 
-const displayFormattedNumber = (value: string): string => {
-  // Convertir de 1000000.00 a 1.000.000,00 para mostrar
-  const num = parseFloat(value) || 0;
-  return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 export default function BancosPage() {
   const [banks, setBanks] = useState<BankPlatform[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);

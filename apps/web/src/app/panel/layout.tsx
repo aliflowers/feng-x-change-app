@@ -198,11 +198,18 @@ export default function PanelLayout({
             </>
           )}
 
-          {/* Config */}
-          <div className="my-4 border-t border-white/10" />
-          {configItems.map((item) => (
-            <NavLink key={item.href} item={item} onClick={() => setSidebarOpen(false)} />
-          ))}
+          {/* Config - Solo Super Admin */}
+          {profile?.role === 'SUPER_ADMIN' && (
+            <>
+              <div className="my-4 border-t border-white/10" />
+              <p className="text-white/40 text-xs font-semibold uppercase tracking-wider px-4 mb-2">
+                Sistema
+              </p>
+              {configItems.map((item) => (
+                <NavLink key={item.href} item={item} onClick={() => setSidebarOpen(false)} />
+              ))}
+            </>
+          )}
         </nav>
 
         {/* User Profile */}
