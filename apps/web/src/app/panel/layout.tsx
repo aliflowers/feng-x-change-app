@@ -30,6 +30,11 @@ interface UserProfile {
   role: 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR';
 }
 
+interface BusinessConfig {
+  business_name: string;
+  logo_url: string;
+}
+
 const menuItems = [
   { href: '/panel', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/panel/pool', label: 'Pool de Operaciones', icon: Inbox },
@@ -59,10 +64,32 @@ export default function PanelLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
+    business_name: 'Fengxchange',
+    logo_url: '',
+  });
 
   useEffect(() => {
     loadProfile();
+    loadBusinessConfig();
   }, []);
+
+  const loadBusinessConfig = async () => {
+    try {
+      const response = await fetch('/api/public/business');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.info) {
+          setBusinessConfig({
+            business_name: data.info.business_name || 'Fengxchange',
+            logo_url: data.info.logo_url || '',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading business config:', error);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -157,15 +184,20 @@ export default function PanelLayout({
           }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#AB2820] to-[#8B2E34] rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-lg">F</span>
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-lg">Fengxchange</h1>
-              <p className="text-amber-400 text-xs font-medium">Panel Admin</p>
-            </div>
+        <div className="flex items-center justify-center px-6 py-3 border-b border-white/10">
+          <div className="flex flex-col items-center">
+            {businessConfig.logo_url ? (
+              <img
+                src={businessConfig.logo_url}
+                alt={businessConfig.business_name}
+                className="h-8 w-auto object-contain"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-[#AB2820] to-[#8B2E34] rounded-lg flex items-center justify-center shadow-lg">
+                <span className="text-white font-bold text-sm">{businessConfig.business_name.charAt(0)}</span>
+              </div>
+            )}
+            <p className="text-amber-400 text-[10px] font-medium mt-1">Panel Admin</p>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

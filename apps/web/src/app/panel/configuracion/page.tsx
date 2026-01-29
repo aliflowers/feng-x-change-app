@@ -16,6 +16,7 @@ import {
 
 // Componentes de tabs
 import ParametrosTab from './components/ParametrosTab';
+import InfoNegocioTab from './components/InfoNegocioTab';
 
 // Tipos
 interface UserProfile {
@@ -192,13 +193,7 @@ export default function ConfiguracionPage() {
             </div>
           )}
 
-          {activeTab === 'negocio' && (
-            <div className="text-center py-12 text-slate-400">
-              <Building2 size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Información del negocio</p>
-              <p className="text-sm mt-2">Se implementará en la Fase 3</p>
-            </div>
-          )}
+          {activeTab === 'negocio' && <InfoNegocioTab />}
 
           {activeTab === 'seguridad' && (
             <div className="text-center py-12 text-slate-400">

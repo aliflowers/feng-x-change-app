@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
+
+interface BusinessConfig {
+  business_name: string;
+  logo_url: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +18,30 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
+    business_name: 'Fengxchange',
+    logo_url: '',
+  });
+
+  useEffect(() => {
+    const loadBusinessConfig = async () => {
+      try {
+        const response = await fetch('/api/public/business');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.info) {
+            setBusinessConfig({
+              business_name: data.info.business_name || 'Fengxchange',
+              logo_url: data.info.logo_url || '',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading business config:', error);
+      }
+    };
+    loadBusinessConfig();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +112,18 @@ export default function LoginPage() {
         {/* Contenido */}
         <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 mb-12 no-underline">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">F</span>
-            </div>
-            <span className="text-3xl font-bold text-white">Fengxchange</span>
+          <Link href="/" className="mb-12 no-underline">
+            {businessConfig.logo_url ? (
+              <img
+                src={businessConfig.logo_url}
+                alt={businessConfig.business_name}
+                className="h-16 w-auto object-contain"
+              />
+            ) : (
+              <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
+              </div>
+            )}
           </Link>
 
           {/* Título principal */}
@@ -123,11 +159,18 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Logo móvil */}
           <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-3 no-underline">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-xl">F</span>
-              </div>
-              <span className="text-2xl font-bold text-gray-900">Fengxchange</span>
+            <Link href="/" className="inline-block no-underline">
+              {businessConfig.logo_url ? (
+                <img
+                  src={businessConfig.logo_url}
+                  alt={businessConfig.business_name}
+                  className="h-14 w-auto object-contain"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center mx-auto">
+                  <span className="text-white font-bold text-xl">{businessConfig.business_name.charAt(0)}</span>
+                </div>
+              )}
             </Link>
           </div>
 

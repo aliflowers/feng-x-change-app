@@ -21,6 +21,11 @@ interface UserProfile {
   email: string;
 }
 
+interface BusinessConfig {
+  business_name: string;
+  logo_url: string;
+}
+
 const navItems = [
   { href: '/app', label: 'Inicio', icon: Home },
   { href: '/app/operaciones', label: 'Operación', icon: ArrowRightLeft },
@@ -40,6 +45,10 @@ export default function ClientLayout({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
+    business_name: 'Fengxchange',
+    logo_url: '',
+  });
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -53,7 +62,24 @@ export default function ClientLayout({
         if (data) setProfile(data);
       }
     };
+    const loadBusinessConfig = async () => {
+      try {
+        const response = await fetch('/api/public/business');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.info) {
+            setBusinessConfig({
+              business_name: data.info.business_name || 'Fengxchange',
+              logo_url: data.info.logo_url || '',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading business config:', error);
+      }
+    };
     loadProfile();
+    loadBusinessConfig();
   }, []);
 
   // Close menu when clicking outside (only when menu is open)
@@ -92,11 +118,18 @@ export default function ClientLayout({
       <header className="bg-gradient-to-r from-[#05294F] to-[#07478F] shadow-lg sticky top-0 z-50">
         <div className="container-app flex items-center justify-between h-14 md:h-16">
           {/* Logo */}
-          <Link href="/app" className="flex items-center gap-2 no-underline">
-            <div className="w-9 h-9 md:w-10 md:h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-lg md:text-xl">F</span>
-            </div>
-            <span className="text-lg md:text-xl font-bold text-white">Fengxchange</span>
+          <Link href="/app" className="flex items-center no-underline">
+            {businessConfig.logo_url ? (
+              <img
+                src={businessConfig.logo_url}
+                alt={businessConfig.business_name}
+                className="h-10 md:h-12 w-auto object-contain"
+              />
+            ) : (
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-lg md:text-xl">{businessConfig.business_name.charAt(0)}</span>
+              </div>
+            )}
           </Link>
 
           {/* Navegación Desktop - Oculta en móvil */}
@@ -196,7 +229,7 @@ export default function ClientLayout({
       {/* Footer Desktop */}
       < footer className="hidden md:block border-t border-gray-200 bg-white/50 mt-auto" >
         <div className="container-app py-4 text-center">
-          <p className="text-xs text-gray-400">© 2026 Fengxchange. Todos los derechos reservados.</p>
+          <p className="text-xs text-gray-400">© 2026 {businessConfig.business_name}. Todos los derechos reservados.</p>
         </div>
       </footer >
 

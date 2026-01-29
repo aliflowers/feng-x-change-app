@@ -6,23 +6,19 @@ import {
   Zap,
   TrendingUp,
   Headphones,
-  MessageCircle,
-  Facebook,
-  Instagram,
   CheckCircle,
   Users,
   Clock,
   Building,
   ArrowRightLeft,
   ArrowRight,
-  MapPin,
-  Mail,
-  Phone
 } from 'lucide-react';
 import { ExchangeTicker } from '@/components/home/ExchangeTicker';
 import { ExchangeCalculator } from '@/components/home/ExchangeCalculator';
 import { HeroTitle } from '@/components/home/HeroTitle';
 import { ExchangeTable } from '@/components/home/ExchangeTable';
+import { LandingHeader } from '@/components/home/LandingHeader';
+import { LandingFooter } from '@/components/home/LandingFooter';
 
 // Bancos aliados (estático por ahora, son logos)
 const banks = [
@@ -68,57 +64,8 @@ export default async function HomePage() {
       </div>
 
       <main className="min-h-screen overflow-x-hidden">
-        {/* Header Premium */}
-        <header className="sticky top-[40px] z-50 bg-white/10 backdrop-blur-md transition-all duration-300">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              {/* Logo */}
-              <Link href="/" className="flex items-center gap-3 no-underline">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">F</span>
-                </div>
-                <span className="text-xl font-bold text-white">
-                  Fengxchange
-                </span>
-              </Link>
-
-              {/* Navegación Desktop */}
-              <nav className="hidden md:flex items-center gap-12">
-                {['Inicio', 'Sistema de envíos', 'Tasas', 'Contacto'].map((item) => (
-                  <a
-                    key={item}
-                    href={`#${item.toLowerCase().replace(/ /g, '-')}`}
-                    className="text-white/90 text-sm font-medium transition-colors hover:text-amber-500 no-underline"
-                  >
-                    {item}
-                  </a>
-                ))}
-              </nav>
-
-              {/* CTAs y Redes */}
-              <div className="flex items-center gap-4">
-                <div className="hidden sm:flex items-center gap-2">
-                  <a href="https://wa.me/1234567890" target="_blank" rel="noopener noreferrer"
-                    className="w-9 h-9 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 shadow-lg">
-                    <MessageCircle size={18} />
-                  </a>
-                  <a href="#" className="w-9 h-9 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 shadow-lg">
-                    <Facebook size={18} />
-                  </a>
-                  <a href="#" className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 shadow-lg">
-                    <Instagram size={18} />
-                  </a>
-                </div>
-                <Link href="/login" className="font-medium text-sm px-4 py-2 rounded-lg transition-all no-underline text-white/90 hover:text-white">
-                  Iniciar Sesión
-                </Link>
-                <Link href="/register" className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 no-underline">
-                  Registrarse
-                </Link>
-              </div>
-            </div>
-          </div>
-        </header>
+        {/* Header Premium - Client Component */}
+        <LandingHeader />
 
         {/* Hero Section con Calculadora */}
         <section className="relative min-h-[90vh] flex items-center -mt-20 pt-20">
@@ -329,90 +276,8 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Footer Premium */}
-        <footer className="bg-gray-900 text-white py-16">
-          <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-              {/* Logo y descripción */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
-                    <span className="text-white font-bold text-xl">F</span>
-                  </div>
-                  <span className="text-xl font-bold">Fengxchange</span>
-                </div>
-                <p className="text-gray-400 mb-4">
-                  La forma más rápida y segura de enviar dinero a Venezuela, Colombia y Perú
-                </p>
-                <div className="flex gap-3">
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-green-500 rounded-full flex items-center justify-center transition-all">
-                    <MessageCircle size={20} />
-                  </a>
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-blue-600 rounded-full flex items-center justify-center transition-all">
-                    <Facebook size={20} />
-                  </a>
-                  <a href="#" className="w-10 h-10 bg-white/10 hover:bg-pink-500 rounded-full flex items-center justify-center transition-all">
-                    <Instagram size={20} />
-                  </a>
-                </div>
-              </div>
-
-              {/* Enlaces rápidos */}
-              <div>
-                <h3 className="text-lg font-bold mb-4">Empresa</h3>
-                <ul className="space-y-2">
-                  {['Nosotros', 'Cómo Funciona', 'Tasas', 'Blog', 'Carreras'].map((item) => (
-                    <li key={item}>
-                      <a href="#" className="text-gray-400 hover:text-white transition-colors">{item}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Legal */}
-              <div>
-                <h3 className="text-lg font-bold mb-4">Legal</h3>
-                <ul className="space-y-2">
-                  {['Términos y Condiciones', 'Política de Privacidad', 'Política Anti-Lavado', 'KYC', 'Cookies'].map((item) => (
-                    <li key={item}>
-                      <a href="#" className="text-gray-400 hover:text-white transition-colors">{item}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Contacto */}
-              <div>
-                <h3 className="text-lg font-bold mb-4">Contacto</h3>
-                <ul className="space-y-4">
-                  <li className="flex items-start gap-3 text-gray-400">
-                    <MapPin className="shrink-0 mt-1" size={18} />
-                    <span>Calle 50, Torre RBS, Piso 15<br />Ciudad de Panamá, Panamá</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-gray-400">
-                    <Mail className="shrink-0" size={18} />
-                    <span>contacto@fengxchange.com</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-gray-400">
-                    <Phone className="shrink-0" size={18} />
-                    <span>+507 833-9000</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-gray-500 text-sm">
-                © {new Date().getFullYear()} Fengxchange. Todos los derechos reservados.
-              </p>
-              <div className="flex gap-6 text-sm text-gray-500">
-                <a href="#" className="hover:text-white transition-colors">Privacidad</a>
-                <a href="#" className="hover:text-white transition-colors">Términos</a>
-                <a href="#" className="hover:text-white transition-colors">Cookies</a>
-              </div>
-            </div>
-          </div>
-        </footer>
+        {/* Footer Premium - Client Component */}
+        <LandingFooter />
       </main>
     </>
   );

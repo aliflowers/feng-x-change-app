@@ -1,9 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Users, Settings, AlertTriangle } from 'lucide-react';
+
+interface BusinessConfig {
+ business_name: string;
+ logo_url: string;
+}
 
 export default function BackofficeLoginPage() {
  const router = useRouter();
@@ -12,6 +17,30 @@ export default function BackofficeLoginPage() {
  const [showPassword, setShowPassword] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [loading, setLoading] = useState(false);
+ const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
+  business_name: 'Fengxchange',
+  logo_url: '',
+ });
+
+ useEffect(() => {
+  const loadBusinessConfig = async () => {
+   try {
+    const response = await fetch('/api/public/business');
+    if (response.ok) {
+     const data = await response.json();
+     if (data.info) {
+      setBusinessConfig({
+       business_name: data.info.business_name || 'Fengxchange',
+       logo_url: data.info.logo_url || '',
+      });
+     }
+    }
+   } catch (error) {
+    console.error('Error loading business config:', error);
+   }
+  };
+  loadBusinessConfig();
+ }, []);
 
  const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -89,13 +118,18 @@ export default function BackofficeLoginPage() {
     <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
      {/* Logo */}
      <div className="flex items-center gap-3 mb-12">
-      <div className="w-14 h-14 bg-gradient-to-br from-[#AB2820] to-[#8B2E34] rounded-2xl flex items-center justify-center shadow-lg shadow-red-900/30">
-       <span className="text-white font-bold text-2xl">F</span>
-      </div>
-      <div>
-       <span className="text-3xl font-bold text-white">Fengxchange</span>
-       <span className="block text-sm text-amber-400 font-medium tracking-wide">BACKOFFICE</span>
-      </div>
+      {businessConfig.logo_url ? (
+       <img
+        src={businessConfig.logo_url}
+        alt={businessConfig.business_name}
+        className="h-16 w-auto object-contain"
+       />
+      ) : (
+       <div className="w-16 h-16 bg-gradient-to-br from-[#AB2820] to-[#8B2E34] rounded-2xl flex items-center justify-center shadow-lg shadow-red-900/30">
+        <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
+       </div>
+      )}
+      <span className="text-sm text-amber-400 font-medium tracking-wide">BACKOFFICE</span>
      </div>
 
      {/* Título principal */}
@@ -139,14 +173,19 @@ export default function BackofficeLoginPage() {
     <div className="w-full max-w-md">
      {/* Logo móvil */}
      <div className="lg:hidden text-center mb-8">
-      <div className="inline-flex items-center gap-3">
-       <div className="w-12 h-12 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
-        <span className="text-white font-bold text-xl">F</span>
-       </div>
-       <div>
-        <span className="text-2xl font-bold text-gray-900">Fengxchange</span>
-        <span className="block text-xs text-[#AB2820] font-semibold">BACKOFFICE</span>
-       </div>
+      <div className="inline-flex flex-col items-center gap-2">
+       {businessConfig.logo_url ? (
+        <img
+         src={businessConfig.logo_url}
+         alt={businessConfig.business_name}
+         className="h-14 w-auto object-contain"
+        />
+       ) : (
+        <div className="w-14 h-14 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
+         <span className="text-white font-bold text-xl">{businessConfig.business_name.charAt(0)}</span>
+        </div>
+       )}
+       <span className="text-xs text-[#AB2820] font-semibold">BACKOFFICE</span>
       </div>
      </div>
 
@@ -260,7 +299,7 @@ export default function BackofficeLoginPage() {
      {/* Footer */}
      <div className="mt-8 text-center">
       <p className="text-xs text-gray-400">
-       © 2026 Fengxchange. Panel de uso interno.
+       © 2026 {businessConfig.business_name}. Panel de uso interno.
       </p>
      </div>
     </div>
