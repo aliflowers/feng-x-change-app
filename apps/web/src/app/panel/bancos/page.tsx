@@ -175,6 +175,44 @@ const BankLogo = ({ name, type }: { name: string; type: 'BANK' | 'PLATFORM' }) =
   );
 };
 
+// Funciones para formatear números con separador de miles (.) y decimales (,)
+const formatNumberInput = (value: string): string => {
+  // Remover todo excepto números y coma
+  let cleaned = value.replace(/[^\d,]/g, '');
+
+  // Asegurar solo una coma
+  const parts = cleaned.split(',');
+  if (parts.length > 2) {
+    cleaned = parts[0] + ',' + parts.slice(1).join('');
+  }
+
+  // Separar parte entera y decimal
+  const [intPart, decPart] = cleaned.split(',');
+
+  // Formatear parte entera con puntos de miles
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  // Limitar decimales a 2
+  const formattedDec = decPart ? decPart.slice(0, 2) : '';
+
+  return formattedDec !== undefined && cleaned.includes(',')
+    ? `${formattedInt},${formattedDec}`
+    : formattedInt;
+};
+
+const parseFormattedNumber = (formatted: string): string => {
+  // Convertir de formato 1.000.000,00 a 1000000.00
+  if (!formatted || formatted.trim() === '') return '';
+  const cleaned = formatted.replace(/\./g, '').replace(',', '.');
+  return cleaned;
+};
+
+const displayFormattedNumber = (value: string): string => {
+  // Convertir de 1000000.00 a 1.000.000,00 para mostrar
+  const num = parseFloat(value) || 0;
+  return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 export default function BancosPage() {
   const [banks, setBanks] = useState<BankPlatform[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -1050,12 +1088,16 @@ export default function BancosPage() {
                   Saldo Actual
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={formData.current_balance}
-                  onChange={(e) => setFormData({ ...formData, current_balance: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
+                  type="text"
+                  inputMode="decimal"
+                  value={formatNumberInput(formData.current_balance.replace('.', ','))}
+                  onChange={(e) => {
+                    const formatted = formatNumberInput(e.target.value);
+                    const parsed = parseFormattedNumber(formatted);
+                    setFormData({ ...formData, current_balance: parsed });
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-mono"
+                  placeholder="0,00"
                 />
               </div>
 
