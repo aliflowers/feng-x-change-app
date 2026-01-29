@@ -1,0 +1,43 @@
+<svg version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 82.9 82.9" style="enable-background:new 0 0 82.9 82.9;" xml:space="preserve">
+ <style type="text/css">
+  .st0{fill:#BB0034;}
+	.st1{fill:#FFFFFF;}
+	.st2{fill:#EA8215;}
+	.st3{fill:#D2741D;}
+	.st4{fill:#EC6B00;}
+	.st5{fill:#0F4D95;}
+	.st6{fill:#0056B4;}
+	.st7{fill:none;}
+ </style>
+ <g>
+  <g id="Capa_1-2">
+   <path class="st0" d="M0,41.6l29.6-12.9v-9.6l0,0c9.3-1.5,18-6,23.9-13.2l0,0l29.3,24.2V0H0V41.6z">
+   </path>
+   <path class="st1" d="M29.6,69.2h23.7V6l0,0c-6,7.2-14.7,12-23.9,13.2l0,0v9.6L0,41.6v9.3L29.6,38v-9.3l9.6-4.2v9.3L29.6,38v9
+			l9.6-4.2v9L29.6,56v-9L0,60.2v9l29.6-12.9C29.6,56.3,29.6,69.2,29.6,69.2z">
+   </path>
+   <polygon class="st2" points="29.6,47 29.6,47 29.6,38 29.6,38 29.6,38 0,50.9 0,60.2 		">
+   </polygon>
+   <polygon class="st2" points="29.6,56 0,69.2 0,69.2 29.6,69.2 		">
+   </polygon>
+   <polygon class="st2" points="29.6,38 38.9,33.8 38.9,24.5 29.6,28.7 29.6,38 		">
+   </polygon>
+   <polygon class="st3" points="29.6,38 29.6,38 29.6,38 		">
+   </polygon>
+   <polygon class="st2" points="29.6,47 29.6,56 38.9,51.8 38.9,42.8 29.6,47 		">
+   </polygon>
+   <polygon class="st4" points="29.6,47 29.6,47 29.6,47 		">
+   </polygon>
+   <polygon class="st2" points="53.3,69.2 82.9,69.2 82.9,30.2 53.3,6 		">
+   </polygon>
+   <polygon class="st3" points="53.3,69.2 53.3,69.2 53.3,6 53.3,6 		">
+   </polygon>
+   <polygon class="st5" points="0,82.9 82.9,82.9 82.9,82.9 		">
+   </polygon>
+   <polygon class="st6" points="53.3,69.2 53.3,69.2 29.6,69.2 0,69.2 0,82.9 82.9,82.9 82.9,69.2 		">
+   </polygon>
+   <line class="st7" x1="53.3" y1="69.2" x2="53.3" y2="69.2">
+   </line>
+  </g>
+ </g>
+</svg>

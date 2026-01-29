@@ -106,6 +106,75 @@ const PLATFORM_PAYMENT_METHODS = [
 
 const ITEMS_PER_PAGE = 20;
 
+// Mapeo de nombres de banco/plataforma a sus logos
+// Los nombres deben coincidir con el campo 'name' en la tabla banks_platforms
+const BANK_LOGOS: Record<string, string> = {
+  // Venezuela
+  'Banco de Venezuela': '/flags/bdv.png',
+  'BDV': '/flags/bdv.png',
+  'Banesco': '/flags/banesco-768x256.jpg',
+  'Mercantil': '/flags/banco-mercantil.jpg',
+  'Banco Mercantil': '/flags/banco-mercantil.jpg',
+  'BNC': '/flags/bnc.png',
+  'Banco Nacional de Crédito': '/flags/bnc.png',
+  // Perú
+  'BCP': '/flags/BCP-Peru.svg',
+  'BCP (Banco de Crédito del Perú)': '/flags/BCP-Peru.svg',
+  'Banco de Crédito del Perú': '/flags/BCP-Peru.svg',
+  'Interbank': '/flags/Interbank.jpeg',
+  'Yape': '/flags/Yape.svg',
+  'Plin': '/flags/Plin.png',
+  'Scotiabank': '/flags/scotiabank.svg',
+  'Scotiabank Perú': '/flags/scotiabank.svg',
+  // Colombia
+  'Bancolombia': '/flags/bancolombia.svg',
+  'Nequi': '/flags/Nequi.jpeg',
+  // Chile
+  'Banco Estado': '/flags/Banco-estado-chile.svg',
+  'BancoEstado': '/flags/Banco-estado-chile.svg',
+  // Internacional
+  'Zelle': '/flags/Zelle.svg',
+  'PayPal': '/flags/PayPal.svg',
+  'Zinli': '/flags/Zinli.jpg',
+  'Binance': '/flags/Binance.jpeg',
+  'Binance Pay': '/flags/Binance.jpeg',
+  'USDT': '/flags/usdt.svg',
+};
+
+// Componente para mostrar el logo del banco o fallback a iniciales
+const BankLogo = ({ name, type }: { name: string; type: 'BANK' | 'PLATFORM' }) => {
+  const logoPath = BANK_LOGOS[name];
+
+  if (logoPath) {
+    return (
+      <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-slate-200 flex items-center justify-center">
+        <img
+          src={logoPath}
+          alt={name}
+          className="w-full h-full object-contain"
+          onError={(e) => {
+            // Si falla la carga, mostrar iniciales
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            target.parentElement!.innerHTML = `<span class="text-white font-bold">${name.substring(0, 2).toUpperCase()}</span>`;
+            target.parentElement!.className = `w-10 h-10 rounded-lg flex items-center justify-center ${type === 'BANK' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-purple-500 to-pink-600'}`;
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Fallback a iniciales
+  return (
+    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${type === 'BANK'
+      ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+      : 'bg-gradient-to-br from-purple-500 to-pink-600'
+      } text-white font-bold`}>
+      {name.substring(0, 2).toUpperCase()}
+    </div>
+  );
+};
+
 export default function BancosPage() {
   const [banks, setBanks] = useState<BankPlatform[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -654,12 +723,7 @@ export default function BancosPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${bank.type === 'BANK'
-                          ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                          : 'bg-gradient-to-br from-purple-500 to-pink-600'
-                          } text-white font-bold`}>
-                          {bank.name.substring(0, 2).toUpperCase()}
-                        </div>
+                        <BankLogo name={bank.name} type={bank.type} />
                         <div>
                           <p className="font-medium text-slate-800">{bank.name}</p>
                           {bank.bank_code && (
