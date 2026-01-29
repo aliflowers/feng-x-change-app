@@ -96,7 +96,10 @@ feng-x-change-app/
 │       ├── cl.svg                      # Chile
 │       ├── pa.svg                      # Panamá
 │       ├── us.svg                      # Estados Unidos
-│       └── eu.svg                      # Unión Europea
+│       ├── eu.svg                      # Unión Europea
+│       ├── PayPal.svg                  # PayPal
+│       ├── Zinli.jpg                   # Zinli
+│       └── usdt.svg                    # Tether USDT
 │
 └── packages/shared/src/types/
     ├── currency.ts                     # Tipo Currency
@@ -122,15 +125,18 @@ Catálogo de monedas disponibles en el sistema.
 
 #### Datos Actuales
 
-| id | code | name | symbol |
-|----|------|------|--------|
-| 1 | USD | Dólar Americano | $ |
-| 2 | VES | Bolívar Venezolano | Bs |
-| 3 | COP | Peso Colombiano | COP |
-| 4 | PEN | Sol Peruano | S/ |
-| 5 | CLP | Peso Chileno | CLP |
-| 6 | EUR | Euro | € |
-| 7 | PAB | Balboa Panameño | B/. |
+| id | code | name | symbol | Tipo |
+|----|------|------|--------|------|
+| 1 | USD | Dólar Americano | $ | Fiat |
+| 2 | VES | Bolívar Venezolano | Bs | Fiat |
+| 3 | COP | Peso Colombiano | COP | Fiat |
+| 4 | PEN | Sol Peruano | S/ | Fiat |
+| 5 | CLP | Peso Chileno | CLP | Fiat |
+| 6 | EUR | Euro | € | Fiat |
+| 7 | PAB | Balboa Panameño | B/. | Fiat |
+| 8 | PAYPAL | PayPal | $ | Digital |
+| 9 | ZINLI | Zinli | $ | Digital |
+| 10 | USDT | Tether USDT | ₮ | Crypto |
 
 ---
 
@@ -364,18 +370,22 @@ const receivedAmount = (parseFloat(amount) || 0) * currentRate;
 
 ```typescript
 const currencyToFlagMap: Record<string, string> = {
+  // Monedas fiat
   'VES': 'VE', 'COP': 'CO', 'PEN': 'PE',
   'CLP': 'CL', 'PAB': 'PA', 'USD': 'US', 'EUR': 'EU',
+  // Monedas digitales
+  'PAYPAL': 'PAYPAL', 'ZINLI': 'ZINLI', 'USDT': 'USDT',
   // Mapeos directos
   'VE': 'VE', 'CO': 'CO', 'PE': 'PE',
   'CL': 'CL', 'PA': 'PA', 'US': 'US', 'EU': 'EU'
 };
 ```
 
-#### Banderas de Países (SVG externos)
+#### Banderas y Logos (archivos externos)
 
 ```typescript
 const countryFlags: Record<string, string> = {
+  // Países
   VE: '/flags/ve.svg',
   CO: '/flags/co.svg',
   PE: '/flags/pe.svg',
@@ -383,15 +393,18 @@ const countryFlags: Record<string, string> = {
   PA: '/flags/pa.svg',
   US: '/flags/us.svg',
   EU: '/flags/eu.svg',
+  // Plataformas digitales
+  PAYPAL: '/flags/PayPal.svg',
+  ZINLI: '/flags/Zinli.jpg',
+  USDT: '/flags/usdt.svg',
 };
 ```
 
-#### Iconos de Plataformas (SVG inline)
+#### Iconos de Plataformas de Pago (legacy - SVG inline)
 
-- `PAYPAL`: Fondo azul (#003087)
-- `ZINLI`: Gradiente púrpura-rosa
-- `ZELLE`: Fondo púrpura (#6D1ED4)
-- `USDT`: Fondo verde (#26A17B)
+> [!NOTE]
+> Los iconos inline de `PAYPAL`, `ZINLI`, `ZELLE` y `USDT` en `platformIcons` son fallback
+> en caso de que no exista archivo externo. Actualmente se usan los archivos SVG/JPG.
 
 ---
 
