@@ -112,23 +112,24 @@ export default function NotificacionesTab() {
   });
 
   // Variables predefinidas para plantillas (clicables)
+  // Usamos nombres descriptivos para legibilidad, se transforman a {{1}}, {{2}} al enviar a Meta
   const templateVariables = [
-    { variable: '{{1}}', label: 'Nombre Cliente', example: 'Juan', description: 'Nombre del cliente' },
-    { variable: '{{2}}', label: 'Apellido Cliente', example: 'Pérez', description: 'Apellido del cliente' },
-    { variable: '{{3}}', label: 'Número Operación', example: 'OP-12345', description: 'Número de referencia de la operación' },
-    { variable: '{{4}}', label: 'Monto Enviado', example: '100.00', description: 'Monto que envía el cliente' },
-    { variable: '{{5}}', label: 'Moneda Origen', example: 'USD', description: 'Moneda de origen' },
-    { variable: '{{6}}', label: 'Monto Recibido', example: '3,650.00', description: 'Monto que recibe el beneficiario' },
-    { variable: '{{7}}', label: 'Moneda Destino', example: 'VES', description: 'Moneda de destino' },
-    { variable: '{{8}}', label: 'Nombre Beneficiario', example: 'María', description: 'Nombre del beneficiario' },
-    { variable: '{{9}}', label: 'Apellido Beneficiario', example: 'González', description: 'Apellido del beneficiario' },
-    { variable: '{{10}}', label: 'Banco/Plataforma', example: 'Banesco', description: 'Banco o plataforma del beneficiario' },
-    { variable: '{{11}}', label: 'Cuenta/Teléfono', example: '0412-1234567', description: 'Número de cuenta o teléfono del beneficiario' },
-    { variable: '{{12}}', label: 'Referencia Pago', example: 'REF-987654', description: 'Número de referencia del pago realizado' },
-    { variable: '{{13}}', label: 'Fecha Operación', example: '30/01/2026', description: 'Fecha de la operación' },
-    { variable: '{{14}}', label: 'Hora Operación', example: '10:30 AM', description: 'Hora de la operación' },
-    { variable: '{{15}}', label: 'Tasa de Cambio', example: '36.50', description: 'Tasa de cambio aplicada' },
-    { variable: '{{16}}', label: 'Estado Operación', example: 'Completada', description: 'Estado actual de la operación' },
+    { variable: '{{nombre_cliente}}', label: 'Nombre Cliente', example: 'Juan', description: 'Nombre del cliente' },
+    { variable: '{{apellido_cliente}}', label: 'Apellido Cliente', example: 'Pérez', description: 'Apellido del cliente' },
+    { variable: '{{numero_operacion}}', label: 'Número Operación', example: 'OP-12345', description: 'Número de referencia de la operación' },
+    { variable: '{{monto_enviado}}', label: 'Monto Enviado', example: '100.00', description: 'Monto que envía el cliente' },
+    { variable: '{{moneda_origen}}', label: 'Moneda Origen', example: 'USD', description: 'Moneda de origen' },
+    { variable: '{{monto_recibido}}', label: 'Monto Recibido', example: '3,650.00', description: 'Monto que recibe el beneficiario' },
+    { variable: '{{moneda_destino}}', label: 'Moneda Destino', example: 'VES', description: 'Moneda de destino' },
+    { variable: '{{nombre_beneficiario}}', label: 'Nombre Beneficiario', example: 'María', description: 'Nombre del beneficiario' },
+    { variable: '{{apellido_beneficiario}}', label: 'Apellido Beneficiario', example: 'González', description: 'Apellido del beneficiario' },
+    { variable: '{{banco_plataforma}}', label: 'Banco/Plataforma', example: 'Banesco', description: 'Banco o plataforma del beneficiario' },
+    { variable: '{{cuenta_telefono}}', label: 'Cuenta/Teléfono', example: '0412-1234567', description: 'Número de cuenta o teléfono del beneficiario' },
+    { variable: '{{referencia_pago}}', label: 'Referencia Pago', example: 'REF-987654', description: 'Número de referencia del pago realizado' },
+    { variable: '{{fecha_operacion}}', label: 'Fecha Operación', example: '30/01/2026', description: 'Fecha de la operación' },
+    { variable: '{{hora_operacion}}', label: 'Hora Operación', example: '10:30 AM', description: 'Hora de la operación' },
+    { variable: '{{tasa_cambio}}', label: 'Tasa de Cambio', example: '36.50', description: 'Tasa de cambio aplicada' },
+    { variable: '{{estado_operacion}}', label: 'Estado Operación', example: 'Completada', description: 'Estado actual de la operación' },
   ];
 
   // Función para insertar variable en el cuerpo del mensaje
@@ -228,6 +229,17 @@ export default function NotificacionesTab() {
       setCreatingTemplate(true);
       setTemplateResult(null);
 
+      // Transformar variables descriptivas a formato numérico para Meta
+      // {{nombre_cliente}} -> {{1}}, {{apellido_cliente}} -> {{2}}, etc.
+      let transformedBody = newTemplate.body;
+      templateVariables.forEach((v, index) => {
+        const numericVariable = `{{${index + 1}}}`;
+        transformedBody = transformedBody.replace(
+          new RegExp(v.variable.replace(/[{}]/g, '\\$&'), 'g'),
+          numericVariable
+        );
+      });
+
       const res = await fetch('/api/whatsapp/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -236,7 +248,7 @@ export default function NotificacionesTab() {
           category: newTemplate.category,
           language: newTemplate.language,
           components: [
-            { type: 'BODY', text: newTemplate.body }
+            { type: 'BODY', text: transformedBody }
           ]
         })
       });
@@ -1078,12 +1090,12 @@ export default function NotificacionesTab() {
                 <textarea
                   value={newTemplate.body}
                   onChange={(e) => setNewTemplate({ ...newTemplate, body: e.target.value })}
-                  placeholder="Hola {{1}} {{2}}, tu operación #{{3}} por {{4}} {{5}} ha sido procesada..."
+                  placeholder="Hola {{nombre_cliente}} {{apellido_cliente}}, tu operación #{{numero_operacion}} por {{monto_enviado}} {{moneda_origen}} ha sido procesada exitosamente..."
                   rows={5}
                   className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none font-mono text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Las variables se mostrarán como {'{{'} 1 {'}}'}, {'{{'} 2 {'}}'}... en el mensaje
+                  Las variables descriptivas se transforman automáticamente al formato requerido por WhatsApp
                 </p>
               </div>
 
