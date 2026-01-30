@@ -111,6 +111,34 @@ export default function NotificacionesTab() {
     body: ''
   });
 
+  // Variables predefinidas para plantillas (clicables)
+  const templateVariables = [
+    { variable: '{{1}}', label: 'Nombre Cliente', example: 'Juan', description: 'Nombre del cliente' },
+    { variable: '{{2}}', label: 'Apellido Cliente', example: 'Pérez', description: 'Apellido del cliente' },
+    { variable: '{{3}}', label: 'Número Operación', example: 'OP-12345', description: 'Número de referencia de la operación' },
+    { variable: '{{4}}', label: 'Monto Enviado', example: '100.00', description: 'Monto que envía el cliente' },
+    { variable: '{{5}}', label: 'Moneda Origen', example: 'USD', description: 'Moneda de origen' },
+    { variable: '{{6}}', label: 'Monto Recibido', example: '3,650.00', description: 'Monto que recibe el beneficiario' },
+    { variable: '{{7}}', label: 'Moneda Destino', example: 'VES', description: 'Moneda de destino' },
+    { variable: '{{8}}', label: 'Nombre Beneficiario', example: 'María', description: 'Nombre del beneficiario' },
+    { variable: '{{9}}', label: 'Apellido Beneficiario', example: 'González', description: 'Apellido del beneficiario' },
+    { variable: '{{10}}', label: 'Banco/Plataforma', example: 'Banesco', description: 'Banco o plataforma del beneficiario' },
+    { variable: '{{11}}', label: 'Cuenta/Teléfono', example: '0412-1234567', description: 'Número de cuenta o teléfono del beneficiario' },
+    { variable: '{{12}}', label: 'Referencia Pago', example: 'REF-987654', description: 'Número de referencia del pago realizado' },
+    { variable: '{{13}}', label: 'Fecha Operación', example: '30/01/2026', description: 'Fecha de la operación' },
+    { variable: '{{14}}', label: 'Hora Operación', example: '10:30 AM', description: 'Hora de la operación' },
+    { variable: '{{15}}', label: 'Tasa de Cambio', example: '36.50', description: 'Tasa de cambio aplicada' },
+    { variable: '{{16}}', label: 'Estado Operación', example: 'Completada', description: 'Estado actual de la operación' },
+  ];
+
+  // Función para insertar variable en el cuerpo del mensaje
+  const insertVariable = (variable: string) => {
+    setNewTemplate(prev => ({
+      ...prev,
+      body: prev.body + variable
+    }));
+  };
+
   // Cargar configuración
   const loadConfig = useCallback(async () => {
     try {
@@ -1019,29 +1047,55 @@ export default function NotificacionesTab() {
                 </div>
               </div>
 
+              {/* Variables disponibles */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  🏷️ Variables disponibles
+                  <span className="text-gray-500 font-normal ml-2">
+                    (haz clic para insertar)
+                  </span>
+                </label>
+                <div className="flex flex-wrap gap-2 p-3 bg-slate-900/50 rounded-xl max-h-40 overflow-y-auto">
+                  {templateVariables.map((v) => (
+                    <button
+                      key={v.variable}
+                      type="button"
+                      onClick={() => insertVariable(v.variable)}
+                      className="px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/30 rounded-lg text-sm text-purple-200 transition-colors"
+                      title={`${v.description} - Ejemplo: ${v.example}`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Cuerpo del mensaje */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Cuerpo del mensaje
-                  <span className="text-gray-500 font-normal ml-2">
-                    (usa {"{{1}}"}, {"{{2}}"} para variables)
-                  </span>
                 </label>
                 <textarea
                   value={newTemplate.body}
                   onChange={(e) => setNewTemplate({ ...newTemplate, body: e.target.value })}
-                  placeholder="Hola {{1}}, tu operación #{{2}} ha sido creada exitosamente."
-                  rows={4}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none"
+                  placeholder="Hola {{1}} {{2}}, tu operación #{{3}} por {{4}} {{5}} ha sido procesada..."
+                  rows={5}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none font-mono text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Las variables se mostrarán como {'{{'} 1 {'}}'}, {'{{'} 2 {'}}'}... en el mensaje
+                </p>
               </div>
 
               {/* Vista previa */}
               {newTemplate.body && (
-                <div className="p-4 bg-slate-900/50 rounded-xl">
+                <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5">
                   <p className="text-sm text-gray-400 mb-2">📱 Vista Previa:</p>
-                  <p className="text-white">
-                    {newTemplate.body.replace(/\{\{1\}\}/g, 'Juan').replace(/\{\{2\}\}/g, '12345').replace(/\{\{3\}\}/g, '100').replace(/\{\{4\}\}/g, 'USD')}
+                  <p className="text-white whitespace-pre-wrap">
+                    {templateVariables.reduce(
+                      (text, v) => text.replace(new RegExp(v.variable.replace(/[{}]/g, '\\$&'), 'g'), v.example),
+                      newTemplate.body
+                    )}
                   </p>
                 </div>
               )}
