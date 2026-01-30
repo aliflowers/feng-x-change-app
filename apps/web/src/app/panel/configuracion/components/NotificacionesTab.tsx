@@ -232,13 +232,33 @@ export default function NotificacionesTab() {
 
       // Transformar variables descriptivas a formato numérico para Meta
       // {{nombre_cliente}} -> {{1}}, {{apellido_cliente}} -> {{2}}, etc.
+      // Lógica de transformación correcta:
+      // 1. Encontrar todas las variables usadas en el texto
+      // 2. Asignarles {{1}}, {{2}}... en orden de aparición
       let transformedBody = newTemplate.body;
-      templateVariables.forEach((v, index) => {
-        const numericVariable = `{{${index + 1}}}`;
-        transformedBody = transformedBody.replace(
-          new RegExp(v.variable.replace(/[{}]/g, '\\$&'), 'g'),
-          numericVariable
-        );
+      const usedVariables: string[] = [];
+
+      // Regex para encontrar {{algo}}
+      const variableRegex = /{{[\w_]+}}/g;
+
+      // Reemplazo secuencial
+      transformedBody = transformedBody.replace(variableRegex, (match) => {
+        // Verificar si es una variable válida de nuestra lista
+        const knownVar = templateVariables.find(v => v.variable === match);
+        if (!knownVar) return match; // Si no la conocemos, la dejamos igual (podría ser error usuario)
+
+        // Si ya la vimos antes, usamos el mismo número?
+        // Meta prefiere {{1}} para la primera variable única.
+        // Pero si repites "Hola {{1}}, adiós {{1}}", es válido.
+        // Ojo: Meta usualmente pide que cada placeholder sea único si son datos distintos.
+        // Asumiremos que cada ocurrencia es una variable posicional nueva para simplificar,
+        // o mejor: reutilizamos índice si es exactamente la misma variable.
+        let index = usedVariables.indexOf(match);
+        if (index === -1) {
+          usedVariables.push(match);
+          index = usedVariables.length - 1;
+        }
+        return `{{${index + 1}}}`;
       });
 
       const res = await fetch('/api/whatsapp/templates', {
