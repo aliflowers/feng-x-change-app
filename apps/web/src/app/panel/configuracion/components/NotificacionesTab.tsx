@@ -261,17 +261,38 @@ export default function NotificacionesTab() {
         return `{{${index + 1}}}`;
       });
 
+      // Recolectar ejemplos para las variables usadas (REQUERIDO POR META)
+      const variableExamples: string[] = [];
+
+      // Iterar sobre las variables usadas en orden secuencial ({{1}}, {{2}}...)
+      // usedVariables contiene los strings originales como "{{nombre_cliente}}"
+      usedVariables.forEach(varName => {
+        const v = templateVariables.find(tv => tv.variable === varName);
+        variableExamples.push(v ? v.example : 'ejemplo');
+      });
+
+      const payload: any = {
+        name: newTemplate.name,
+        category: newTemplate.category,
+        language: newTemplate.language,
+        components: [
+          {
+            type: 'BODY',
+            text: transformedBody,
+            // Solo agregar examples si hay variables
+            ...(variableExamples.length > 0 && {
+              example: {
+                body_text: [variableExamples]
+              }
+            })
+          }
+        ]
+      };
+
       const res = await fetch('/api/whatsapp/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newTemplate.name,
-          category: newTemplate.category,
-          language: newTemplate.language,
-          components: [
-            { type: 'BODY', text: transformedBody }
-          ]
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
