@@ -17,6 +17,7 @@ import {
 // Componentes de tabs
 import ParametrosTab from './components/ParametrosTab';
 import InfoNegocioTab from './components/InfoNegocioTab';
+import NotificacionesTab from './components/NotificacionesTab';
 
 // Tipos
 interface UserProfile {
@@ -186,10 +187,8 @@ export default function ConfiguracionPage() {
           {activeTab === 'parametros' && <ParametrosTab />}
 
           {activeTab === 'notificaciones' && (
-            <div className="text-center py-12 text-slate-400">
-              <Bell size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Configuración de notificaciones</p>
-              <p className="text-sm mt-2">Se implementará en la Fase 4</p>
+            <div className="bg-slate-900/50 rounded-2xl p-6 border border-white/10">
+              <NotificacionesTab />
             </div>
           )}
 
