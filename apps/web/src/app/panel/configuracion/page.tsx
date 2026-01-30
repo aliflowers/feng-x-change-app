@@ -18,6 +18,7 @@ import {
 import ParametrosTab from './components/ParametrosTab';
 import InfoNegocioTab from './components/InfoNegocioTab';
 import NotificacionesTab from './components/NotificacionesTab';
+import SeguridadTab from './components/SeguridadTab';
 
 // Tipos
 interface UserProfile {
@@ -195,10 +196,8 @@ export default function ConfiguracionPage() {
           {activeTab === 'negocio' && <InfoNegocioTab />}
 
           {activeTab === 'seguridad' && (
-            <div className="text-center py-12 text-slate-400">
-              <Shield size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Configuración de seguridad</p>
-              <p className="text-sm mt-2">Se implementará en la Fase 5</p>
+            <div className="bg-slate-900/50 rounded-2xl p-6 border border-white/10">
+              <SeguridadTab />
             </div>
           )}
 
