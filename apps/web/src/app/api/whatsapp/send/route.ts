@@ -106,16 +106,35 @@ export async function POST(request: NextRequest) {
   // Enviar mensaje usando la API de WhatsApp Business
   const messageUrl = `${apiUrl}/${waConfig.phone_number_id}/messages`;
 
-  const whatsappPayload = {
-   messaging_product: 'whatsapp',
-   recipient_type: 'individual',
-   to: formattedNumber,
-   type: 'text',
-   text: {
-    preview_url: false,
-    body: message
-   }
-  };
+  // Determinar si es plantilla o texto
+  let whatsappPayload;
+
+  if (body.type === 'template') {
+   whatsappPayload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: formattedNumber,
+    type: 'template',
+    template: {
+     name: body.template_name || 'hello_world',
+     language: {
+      code: body.language || 'en_US'
+     }
+    }
+   };
+  } else {
+   // Mensaje de texto libre (solo funciona en ventana de 24h)
+   whatsappPayload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: formattedNumber,
+    type: 'text',
+    text: {
+     preview_url: false,
+     body: message
+    }
+   };
+  }
 
   console.log('Sending WhatsApp message to:', formattedNumber);
 

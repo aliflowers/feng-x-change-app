@@ -93,7 +93,8 @@ export default function NotificacionesTab() {
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
   const [testMessageForm, setTestMessageForm] = useState({
     to: '+584144559038',
-    message: 'Hola! Esto es una prueba de envío de mensaje con la integración de WhatsApp Business API desde FengXchange.'
+    message: 'Hola! Esto es una prueba de envío de mensaje con la integración de WhatsApp Business API desde FengXchange.',
+    isTemplate: false // Para probar inicio de conversación
   });
   const [testMessageResult, setTestMessageResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -461,7 +462,10 @@ export default function NotificacionesTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: testMessageForm.to,
-          message: testMessageForm.message
+          message: testMessageForm.message,
+          type: testMessageForm.isTemplate ? 'template' : 'text',
+          template_name: 'hello_world', // Plantilla default de Meta
+          language: 'en_US'
         })
       });
 
@@ -713,6 +717,23 @@ export default function NotificacionesTab() {
                   className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-green-500/50 focus:outline-none resize-none"
                 />
               </div>
+
+              {/* Checkbox template */}
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={testMessageForm.isTemplate}
+                    onChange={(e) => setTestMessageForm({ ...testMessageForm, isTemplate: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-700 rounded-full peer peer-checked:bg-green-500 transition-colors"></div>
+                  <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+                </div>
+                <span className="text-sm text-gray-300">
+                  Usar plantilla <code className="bg-slate-800 px-1 rounded text-xs">hello_world</code> (para iniciar conversación)
+                </span>
+              </label>
 
               {/* Resultado del envío */}
               {testMessageResult && (

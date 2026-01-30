@@ -86,13 +86,15 @@ export async function POST(request: NextRequest) {
        // await processIncomingMessage(message, contacts, metadata);
       }
 
-      // Procesar estados de mensajes (enviado, entregado, leído)
+      // Procesar estados de mensajes (enviado, entregado, leído, fallido)
       const statuses = value.statuses || [];
       for (const status of statuses) {
        console.log('Message status update:', {
         id: status.id,
         status: status.status,
-        recipient_id: status.recipient_id
+        recipient_id: status.recipient_id,
+        // Loguear errores si existen (ej. fallo por ventana 24h)
+        errors: status.errors || undefined
        });
 
        // TODO: Actualizar estado del mensaje en la BD
