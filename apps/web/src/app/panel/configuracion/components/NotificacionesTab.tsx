@@ -10,7 +10,11 @@ import {
   Check,
   Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Trash2,
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 // Tipos
@@ -37,6 +41,18 @@ interface EmailConfig {
 interface NotificationsConfig {
   whatsapp: WhatsAppConfig;
   email: EmailConfig;
+}
+
+// Interfaz para plantillas de WhatsApp
+interface WhatsAppTemplate {
+  name: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED' | 'DISABLED';
+  language: string;
+  category: string;
+  components: Array<{
+    type: string;
+    text?: string;
+  }>;
 }
 
 type SubTab = 'whatsapp' | 'email' | 'templates';
@@ -80,6 +96,20 @@ export default function NotificacionesTab() {
     message: 'Hola! Esto es una prueba de envío de mensaje con la integración de WhatsApp Business API desde FengXchange.'
   });
   const [testMessageResult, setTestMessageResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Estado para plantillas
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [deletingTemplate, setDeletingTemplate] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [templateResult, setTemplateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [newTemplate, setNewTemplate] = useState({
+    name: '',
+    category: 'UTILITY' as 'UTILITY' | 'MARKETING' | 'AUTHENTICATION',
+    language: 'es',
+    body: ''
+  });
 
   // Cargar configuración
   const loadConfig = useCallback(async () => {
@@ -126,6 +156,127 @@ export default function NotificacionesTab() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  // Cargar plantillas
+  const loadTemplates = useCallback(async () => {
+    try {
+      setLoadingTemplates(true);
+      setTemplateResult(null);
+      const res = await fetch('/api/whatsapp/templates');
+
+      if (!res.ok) {
+        throw new Error('Error al cargar plantillas');
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setTemplates(data.templates || []);
+      } else {
+        setTemplateResult({ success: false, message: data.error || 'Error al cargar plantillas' });
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      setTemplateResult({ success: false, message: 'Error al cargar plantillas' });
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
+  // Cargar plantillas cuando se cambia a la pestaña de templates
+  useEffect(() => {
+    if (activeTab === 'templates' && config?.whatsapp.has_token) {
+      loadTemplates();
+    }
+  }, [activeTab, config?.whatsapp.has_token, loadTemplates]);
+
+  // Crear plantilla
+  const createTemplate = async () => {
+    if (!newTemplate.name || !newTemplate.body) {
+      setTemplateResult({ success: false, message: 'El nombre y el cuerpo son requeridos' });
+      return;
+    }
+
+    try {
+      setCreatingTemplate(true);
+      setTemplateResult(null);
+
+      const res = await fetch('/api/whatsapp/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newTemplate.name,
+          category: newTemplate.category,
+          language: newTemplate.language,
+          components: [
+            { type: 'BODY', text: newTemplate.body }
+          ]
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTemplateResult({ success: true, message: data.message });
+        setShowCreateForm(false);
+        setNewTemplate({ name: '', category: 'UTILITY', language: 'es', body: '' });
+        loadTemplates();
+      } else {
+        setTemplateResult({ success: false, message: data.details || data.error });
+      }
+    } catch (error) {
+      console.error('Error creating template:', error);
+      setTemplateResult({ success: false, message: 'Error al crear plantilla' });
+    } finally {
+      setCreatingTemplate(false);
+    }
+  };
+
+  // Eliminar plantilla
+  const deleteTemplate = async (name: string) => {
+    if (!confirm(`¿Estás seguro de eliminar la plantilla "${name}"? Esta acción eliminará todas las versiones de idioma.`)) {
+      return;
+    }
+
+    try {
+      setDeletingTemplate(name);
+      setTemplateResult(null);
+
+      const res = await fetch(`/api/whatsapp/templates?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTemplateResult({ success: true, message: data.message });
+        loadTemplates();
+      } else {
+        setTemplateResult({ success: false, message: data.details || data.error });
+      }
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      setTemplateResult({ success: false, message: 'Error al eliminar plantilla' });
+    } finally {
+      setDeletingTemplate(null);
+    }
+  };
+
+  // Helper para obtener badge de estado
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, { bg: string; text: string; label: string }> = {
+      'APPROVED': { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Aprobada' },
+      'PENDING': { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pendiente' },
+      'REJECTED': { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rechazada' },
+      'PAUSED': { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Pausada' },
+      'DISABLED': { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Deshabilitada' }
+    };
+    const badge = badges[status] || badges['PENDING'];
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+        {badge.label}
+      </span>
+    );
+  };
 
   // Guardar WhatsApp
   const saveWhatsApp = async () => {
@@ -340,13 +491,13 @@ export default function NotificacionesTab() {
               </div>
               <div>
                 <h3 className="font-semibold text-white">WhatsApp Business API</h3>
-                <p className="text-sm text-gray-400">Configura la integración con Meta WhatsApp Business</p>
+                <p className="text-sm text-gray-100">Configura la integración con Meta WhatsApp Business</p>
               </div>
             </div>
 
             {/* Toggle enabled */}
             <label className="flex items-center gap-2 cursor-pointer">
-              <span className="text-sm text-gray-400">Habilitado</span>
+              <span className="text-sm text-gray-50">Habilitado</span>
               <div className="relative">
                 <input
                   type="checkbox"
@@ -364,7 +515,7 @@ export default function NotificacionesTab() {
           <div className="grid gap-4">
             {/* API URL */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-100 mb-2">
                 API URL
               </label>
               <input
@@ -378,7 +529,7 @@ export default function NotificacionesTab() {
 
             {/* Phone Number ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-100 mb-2">
                 Phone Number ID
               </label>
               <input
@@ -388,14 +539,14 @@ export default function NotificacionesTab() {
                 placeholder="123456789012345"
                 className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-green-500/50 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-200">
                 ID del número de teléfono registrado en Meta Business
               </p>
             </div>
 
             {/* Business Account ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-100 mb-2">
                 WhatsApp Business Account ID (WABA ID)
               </label>
               <input
@@ -405,14 +556,14 @@ export default function NotificacionesTab() {
                 placeholder="123456789012345"
                 className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-green-500/50 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-200">
                 ID de tu cuenta de WhatsApp Business en Meta Business Manager
               </p>
             </div>
 
             {/* Access Token */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-100 mb-2">
                 Access Token
                 {config?.whatsapp.has_token && !hasTokenChanges && (
                   <span className="ml-2 text-xs text-green-400">
@@ -439,7 +590,7 @@ export default function NotificacionesTab() {
                   {showWaToken ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-200">
                 El token se cifrará antes de guardarse. Solo se mostrará enmascarado.
               </p>
             </div>
@@ -744,27 +895,261 @@ export default function NotificacionesTab() {
       {/* Templates */}
       {activeTab === 'templates' && (
         <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
-              <FileText className="text-purple-400" size={24} />
+          {/* Header con botones */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-500/20 rounded-lg">
+                <FileText className="text-purple-400" size={24} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Plantillas de WhatsApp</h3>
+                <p className="text-sm text-gray-200">
+                  {templates.length} plantilla{templates.length !== 1 ? 's' : ''} registrada{templates.length !== 1 ? 's' : ''}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-white">Plantillas de Notificación</h3>
-              <p className="text-sm text-gray-400">Administra las plantillas para WhatsApp y Email</p>
+            <div className="flex gap-2">
+              <button
+                onClick={loadTemplates}
+                disabled={loadingTemplates}
+                className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={loadingTemplates ? 'animate-spin' : ''} />
+                Actualizar
+              </button>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                disabled={!config?.whatsapp.has_token}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus size={16} />
+                Nueva Plantilla
+              </button>
             </div>
           </div>
 
-          {/* Coming Soon */}
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="p-4 bg-purple-500/10 rounded-full mb-4">
-              <FileText className="text-purple-400" size={40} />
+          {/* Alerta si no hay configuración de WhatsApp */}
+          {!config?.whatsapp.has_token && (
+            <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl flex items-center gap-3">
+              <AlertCircle className="text-yellow-400" size={20} />
+              <span className="text-yellow-300">
+                Configura WhatsApp Business API primero para gestionar plantillas
+              </span>
             </div>
-            <h4 className="text-lg font-medium text-white mb-2">Próximamente</h4>
-            <p className="text-gray-400 max-w-md">
-              La gestión de plantillas estará disponible en una próxima actualización.
-              Podrás crear y editar plantillas para diferentes tipos de notificaciones.
-            </p>
+          )}
+
+          {/* Resultado de operación */}
+          {templateResult && (
+            <div className={`p-4 rounded-xl flex items-center gap-3 ${templateResult.success
+              ? 'bg-green-500/10 border border-green-500/30'
+              : 'bg-red-500/10 border border-red-500/30'
+              }`}>
+              {templateResult.success ? (
+                <Check className="text-green-400" size={20} />
+              ) : (
+                <AlertCircle className="text-red-400" size={20} />
+              )}
+              <span className={templateResult.success ? 'text-green-300' : 'text-red-300'}>
+                {templateResult.message}
+              </span>
+            </div>
+          )}
+
+          {/* Formulario de creación */}
+          {showCreateForm && (
+            <div className="p-6 bg-slate-800/50 border border-purple-500/30 rounded-xl space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-medium text-white">➕ Crear Nueva Plantilla</h4>
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                {/* Nombre */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nombre (snake_case)
+                  </label>
+                  <input
+                    type="text"
+                    value={newTemplate.name}
+                    onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
+                    placeholder="welcome_message"
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                  />
+                </div>
+
+                {/* Categoría */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Categoría
+                  </label>
+                  <select
+                    value={newTemplate.category}
+                    onChange={(e) => setNewTemplate({ ...newTemplate, category: e.target.value as 'UTILITY' | 'MARKETING' | 'AUTHENTICATION' })}
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-purple-500/50 focus:outline-none"
+                  >
+                    <option value="UTILITY">Utilidad</option>
+                    <option value="MARKETING">Marketing</option>
+                    <option value="AUTHENTICATION">Autenticación</option>
+                  </select>
+                </div>
+
+                {/* Idioma */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Idioma
+                  </label>
+                  <select
+                    value={newTemplate.language}
+                    onChange={(e) => setNewTemplate({ ...newTemplate, language: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-purple-500/50 focus:outline-none"
+                  >
+                    <option value="es">Español (es)</option>
+                    <option value="es_ES">Español España (es_ES)</option>
+                    <option value="es_MX">Español México (es_MX)</option>
+                    <option value="en">Inglés (en)</option>
+                    <option value="en_US">Inglés US (en_US)</option>
+                    <option value="pt_BR">Portugués Brasil (pt_BR)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Cuerpo del mensaje */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Cuerpo del mensaje
+                  <span className="text-gray-500 font-normal ml-2">
+                    (usa {"{{1}}"}, {"{{2}}"} para variables)
+                  </span>
+                </label>
+                <textarea
+                  value={newTemplate.body}
+                  onChange={(e) => setNewTemplate({ ...newTemplate, body: e.target.value })}
+                  placeholder="Hola {{1}}, tu operación #{{2}} ha sido creada exitosamente."
+                  rows={4}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none"
+                />
+              </div>
+
+              {/* Vista previa */}
+              {newTemplate.body && (
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-sm text-gray-400 mb-2">📱 Vista Previa:</p>
+                  <p className="text-white">
+                    {newTemplate.body.replace(/\{\{1\}\}/g, 'Juan').replace(/\{\{2\}\}/g, '12345').replace(/\{\{3\}\}/g, '100').replace(/\{\{4\}\}/g, 'USD')}
+                  </p>
+                </div>
+              )}
+
+              {/* Nota de aprobación */}
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-yellow-300 text-sm">
+                  ⚠️ Las plantillas requieren aprobación de Meta (puede tomar 1-48 horas)
+                </p>
+              </div>
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={createTemplate}
+                  disabled={creatingTemplate || !newTemplate.name || !newTemplate.body}
+                  className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingTemplate ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Plus size={16} />
+                  )}
+                  Crear Plantilla
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de plantillas */}
+          {config?.whatsapp.has_token && (
+            <div className="overflow-x-auto">
+              {loadingTemplates ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={32} className="animate-spin text-purple-400" />
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="p-4 bg-purple-500/10 rounded-full mb-4">
+                    <FileText className="text-purple-400" size={40} />
+                  </div>
+                  <h4 className="text-lg font-medium text-white mb-2">Sin plantillas</h4>
+                  <p className="text-gray-200 max-w-md">
+                    No hay plantillas registradas en tu cuenta de WhatsApp Business.
+                    Crea tu primera plantilla para enviar mensajes automatizados.
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">Nombre</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">Idioma</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">Categoría</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-400">Estado</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-gray-400">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {templates.map((template, index) => (
+                      <tr key={`${template.name}-${template.language}-${index}`} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="px-4 py-4">
+                          <span className="font-mono text-white">{template.name}</span>
+                        </td>
+                        <td className="px-4 py-4 text-gray-300">{template.language}</td>
+                        <td className="px-4 py-4">
+                          <span className="text-gray-300 capitalize">{template.category.toLowerCase()}</span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {getStatusBadge(template.status)}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            onClick={() => deleteTemplate(template.name)}
+                            disabled={deletingTemplate === template.name}
+                            className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            title="Eliminar plantilla"
+                          >
+                            {deletingTemplate === template.name ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Info adicional */}
+          <div className="p-4 bg-slate-800/30 rounded-xl">
+            <h5 className="text-sm font-medium text-white mb-2">ℹ️ Información sobre plantillas</h5>
+            <ul className="text-sm text-gray-400 space-y-1">
+              <li>• Máximo 100 plantillas por hora pueden ser creadas</li>
+              <li>• Hasta 250 plantillas activas por cuenta</li>
+              <li>• Las plantillas aprobadas pueden usarse para iniciar conversaciones</li>
+              <li>• Los estados posibles son: Pendiente, Aprobada, Rechazada, Pausada, Deshabilitada</li>
+            </ul>
           </div>
         </div>
       )}

@@ -98,6 +98,33 @@ export async function POST(request: NextRequest) {
        // TODO: Actualizar estado del mensaje en la BD
       }
      }
+
+     // Handler para actualizaciones de estado de plantillas
+     if (change.field === 'message_template_status_update') {
+      const value = change.value || {};
+
+      console.log('📋 Template status update:', {
+       event: value.event,
+       template_name: value.message_template_name,
+       language: value.message_template_language,
+       reason: value.reason || null
+      });
+
+      // Los posibles estados son: APPROVED, REJECTED, PENDING, PAUSED, DISABLED
+      // Aquí podrías notificar al admin por email o guardar en BD
+      // TODO: Implementar notificación al admin cuando una plantilla cambie de estado
+     }
+
+     // Handler para calidad de la cuenta de WhatsApp
+     if (change.field === 'account_update') {
+      const value = change.value || {};
+
+      console.log('⚠️ Account quality update:', {
+       phone_number: value.phone_number,
+       event: value.event,
+       reason: value.reason || null
+      });
+     }
     }
    }
   }
