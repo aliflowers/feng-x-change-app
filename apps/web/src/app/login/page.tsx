@@ -67,27 +67,16 @@ export default function LoginPage() {
           .eq('id', data.user.id)
           .single();
 
-        // Redirigir según el rol
+        // Redirigir según el rol - Clientes van a /app
+        router.refresh();
         if (profile) {
-          // Forzar refresco para actualizar cookies en middleware
-          router.refresh();
-
           switch (profile.role) {
-            case 'SUPER_ADMIN':
-              router.push('/admin');
-              break;
-            case 'ADMIN':
-            case 'CAJERO':
-            case 'SUPERVISOR':
-              router.push('/panel');
-              break;
             case 'CLIENT':
             case 'AFFILIATE':
             default:
               router.push('/app');
           }
         } else {
-          router.refresh();
           router.push('/app');
         }
       }
@@ -276,35 +265,35 @@ export default function LoginPage() {
                 )}
               </button>
             </form>
+          </div>
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-400">o</span>
-              </div>
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
             </div>
-
-            {/* Registrarse */}
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">
-                ¿No tienes cuenta?{' '}
-                <Link href="/register" className="text-[#05294F] font-semibold hover:underline no-underline">
-                  Regístrate gratis
-                </Link>
-              </p>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-400">o</span>
             </div>
           </div>
 
-          {/* Volver */}
-          <div className="mt-8 text-center">
-            <Link href="/" className="inline-flex items-center gap-2 text-gray-500 text-sm hover:text-gray-700 transition-colors no-underline">
-              <ArrowRight size={16} className="rotate-180" />
-              Volver al inicio
-            </Link>
+          {/* Registrarse */}
+          <div className="text-center">
+            <p className="text-gray-500 text-sm">
+              ¿No tienes cuenta?{' '}
+              <Link href="/register" className="text-[#05294F] font-semibold hover:underline no-underline">
+                Regístrate gratis
+              </Link>
+            </p>
           </div>
+        </div>
+
+        {/* Volver */}
+        <div className="mt-8 text-center">
+          <Link href="/" className="inline-flex items-center gap-2 text-gray-500 text-sm hover:text-gray-700 transition-colors no-underline">
+            <ArrowRight size={16} className="rotate-180" />
+            Volver al inicio
+          </Link>
         </div>
       </div>
     </main>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Users, Settings, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Users, Settings, AlertTriangle, Smartphone } from 'lucide-react';
 
 interface BusinessConfig {
  business_name: string;
@@ -21,6 +21,12 @@ export default function BackofficeLoginPage() {
   business_name: 'Fengxchange',
   logo_url: '',
  });
+
+ // Estados para 2FA
+ const [requires2FA, setRequires2FA] = useState(false);
+ const [twoFactorCode, setTwoFactorCode] = useState('');
+ const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'email'>('totp');
+ const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
 
  useEffect(() => {
   const loadBusinessConfig = async () => {
@@ -73,24 +79,65 @@ export default function BackofficeLoginPage() {
     }
 
     // Solo permitir roles internos
-    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'CAJERO'];
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'CAJERO', 'SUPERVISOR', 'OPERATOR'];
     if (!allowedRoles.includes(profile.role)) {
      await supabase.auth.signOut();
      setError('Acceso denegado. Esta área es solo para personal autorizado.');
      return;
     }
 
-    // Redirigir al panel según el rol
-    router.refresh();
-    if (profile.role === 'SUPER_ADMIN') {
-     router.push('/panel');
-    } else {
-     router.push('/panel');
+    // Verificar si el usuario tiene 2FA activo
+    const { data: profileFull } = await supabase
+     .from('profiles')
+     .select('two_factor_method, two_factor_verified')
+     .eq('id', data.user.id)
+     .single();
+
+    if (profileFull?.two_factor_verified && profileFull?.two_factor_method) {
+     setTwoFactorMethod(profileFull.two_factor_method as 'totp' | 'email');
+     setRequires2FA(true);
+     setPendingRedirect('/panel');
+     return; // No redirigir aún, esperar código 2FA
     }
+
+    // Sin 2FA, redirigir directamente
+    router.refresh();
+    router.push('/panel');
    }
   } catch (err) {
    console.error(err);
    setError('Error al iniciar sesión. Intenta de nuevo.');
+  } finally {
+   setLoading(false);
+  }
+ };
+
+ const handleVerify2FA = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
+
+  try {
+   const res = await fetch('/api/auth/2fa/verify-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: twoFactorCode }),
+   });
+
+   const data = await res.json();
+
+   if (!res.ok) {
+    setError(data.error || 'Código incorrecto');
+    setTwoFactorCode('');
+    return;
+   }
+
+   // Verificación exitosa, redirigir
+   router.refresh();
+   router.push(pendingRedirect || '/panel');
+  } catch (err) {
+   console.error(err);
+   setError('Error al verificar código');
   } finally {
    setLoading(false);
   }
@@ -201,91 +248,180 @@ export default function BackofficeLoginPage() {
 
      {/* Card de login */}
      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 sm:p-8">
-      <form onSubmit={handleLogin} className="space-y-5">
-       {/* Error */}
-       {error && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3">
-         <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-          <AlertTriangle size={16} className="text-red-500" />
+      {requires2FA ? (
+       /* Formulario de verificación 2FA */
+       <form onSubmit={handleVerify2FA} className="space-y-5">
+        <div className="text-center mb-6">
+         <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Smartphone className="w-8 h-8 text-purple-600" />
          </div>
-         {error}
+         <h3 className="text-xl font-bold text-gray-900 mb-2">
+          Verificación en 2 pasos
+         </h3>
+         <p className="text-gray-500 text-sm">
+          {twoFactorMethod === 'totp'
+           ? 'Ingresa el código de tu aplicación de autenticación'
+           : 'Ingresa el código enviado a tu email'}
+         </p>
         </div>
-       )}
 
-       {/* Email */}
-       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-         Correo corporativo
-        </label>
-        <div className="relative">
-         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-          <Mail size={20} />
+        {/* Error */}
+        {error && (
+         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3">
+          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+           <AlertTriangle size={16} className="text-red-500" />
+          </div>
+          {error}
          </div>
-         <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full bg-slate-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 text-gray-900 focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
-          placeholder="admin@fengxchange.com"
-          required
-          autoComplete="email"
-         />
-        </div>
-       </div>
-
-       {/* Password */}
-       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-         Contraseña
-        </label>
-        <div className="relative">
-         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-          <Lock size={20} />
-         </div>
-         <input
-          id="password"
-          type={showPassword ? 'text' : 'password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full bg-slate-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 pr-12 text-gray-900 focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
-          placeholder="••••••••"
-          required
-          autoComplete="current-password"
-         />
-         <button
-          type="button"
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-          tabIndex={-1}
-         >
-          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-         </button>
-        </div>
-       </div>
-
-       {/* Submit */}
-       <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white font-semibold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-       >
-        {loading ? (
-         <span className="flex items-center gap-2">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          Verificando acceso...
-         </span>
-        ) : (
-         <>
-          Acceder al Panel
-          <ArrowRight size={20} />
-         </>
         )}
-       </button>
-      </form>
+
+        {/* Código 2FA */}
+        <div>
+         <label htmlFor="twoFactorCode" className="block text-sm font-medium text-gray-700 mb-2">
+          Código de verificación
+         </label>
+         <input
+          id="twoFactorCode"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9A-Za-z]*"
+          maxLength={8}
+          value={twoFactorCode}
+          onChange={(e) => setTwoFactorCode(e.target.value.replace(/[^0-9A-Za-z]/g, ''))}
+          className="w-full bg-slate-50 border border-gray-200 rounded-xl px-4 py-4 text-gray-900 text-center text-2xl tracking-widest font-mono focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+          placeholder="000000"
+          autoFocus
+          required
+         />
+        </div>
+
+        {/* Botones */}
+        <button
+         type="submit"
+         disabled={loading || twoFactorCode.length < 6}
+         className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+         {loading ? (
+          <span className="flex items-center gap-2">
+           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+           </svg>
+           Verificando...
+          </span>
+         ) : (
+          <>
+           Verificar código
+           <ArrowRight size={18} />
+          </>
+         )}
+        </button>
+
+        <button
+         type="button"
+         onClick={() => {
+          setRequires2FA(false);
+          setTwoFactorCode('');
+          setPendingRedirect(null);
+          supabase.auth.signOut();
+         }}
+         className="w-full text-gray-500 hover:text-gray-700 text-sm py-2"
+        >
+         Cancelar e intentar con otra cuenta
+        </button>
+
+        <p className="text-center text-xs text-gray-400">
+         ¿Problemas? Usa un código de respaldo de 8 caracteres
+        </p>
+       </form>
+      ) : (
+       /* Formulario de login normal */
+       <form onSubmit={handleLogin} className="space-y-5">
+        {/* Error */}
+        {error && (
+         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3">
+          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+           <AlertTriangle size={16} className="text-red-500" />
+          </div>
+          {error}
+         </div>
+        )}
+
+        {/* Email */}
+        <div>
+         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          Correo corporativo
+         </label>
+         <div className="relative">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+           <Mail size={20} />
+          </div>
+          <input
+           id="email"
+           type="email"
+           value={email}
+           onChange={(e) => setEmail(e.target.value)}
+           className="w-full bg-slate-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 text-gray-900 focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+           placeholder="admin@fengxchange.com"
+           required
+           autoComplete="email"
+          />
+         </div>
+        </div>
+
+        {/* Password */}
+        <div>
+         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+          Contraseña
+         </label>
+         <div className="relative">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+           <Lock size={20} />
+          </div>
+          <input
+           id="password"
+           type={showPassword ? 'text' : 'password'}
+           value={password}
+           onChange={(e) => setPassword(e.target.value)}
+           className="w-full bg-slate-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 pr-12 text-gray-900 focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+           placeholder="••••••••"
+           required
+           autoComplete="current-password"
+          />
+          <button
+           type="button"
+           onClick={() => setShowPassword(!showPassword)}
+           className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+           tabIndex={-1}
+          >
+           {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+         </div>
+        </div>
+
+        {/* Submit */}
+        <button
+         type="submit"
+         disabled={loading}
+         className="w-full bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white font-semibold py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+         {loading ? (
+          <span className="flex items-center gap-2">
+           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+           </svg>
+           Verificando acceso...
+          </span>
+         ) : (
+          <>
+           Acceder al Panel
+           <ArrowRight size={20} />
+          </>
+         )}
+        </button>
+       </form>
+      )}
 
       {/* Info de seguridad */}
       <div className="mt-6 pt-6 border-t border-gray-100">

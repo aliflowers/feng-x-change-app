@@ -38,11 +38,11 @@ interface Tab {
   description: string;
 }
 
-const tabs: Tab[] = [
+const allTabs: Tab[] = [
   { id: 'parametros', label: 'Parámetros', icon: Settings, description: 'Timer, penalizaciones y comisiones' },
   { id: 'notificaciones', label: 'Notificaciones', icon: Bell, description: 'WhatsApp y Email' },
   { id: 'negocio', label: 'Negocio', icon: Building2, description: 'Info, horarios y políticas' },
-  { id: 'seguridad', label: 'Seguridad', icon: Shield, description: 'Rate limit, 2FA, auditoría' },
+  { id: 'seguridad', label: 'Seguridad', icon: Shield, description: '2FA personal' },
   { id: 'cuenta', label: 'Mi Cuenta', icon: User, description: 'Email y contraseña' },
   { id: 'agente', label: 'Agente IA', icon: Bot, description: 'Configuración del bot' },
 ];
@@ -78,8 +78,10 @@ export default function ConfiguracionPage() {
         return;
       }
 
-      // Verificación estricta: SOLO SUPER_ADMIN
-      if (profileData.role !== 'SUPER_ADMIN') {
+      // Verificación: usuarios internos pueden acceder (2FA personal)
+      // SUPER_ADMIN ve todo, otros roles solo ven Seguridad
+      const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'CAJERO', 'SUPERVISOR', 'OPERATOR'];
+      if (!allowedRoles.includes(profileData.role)) {
         router.push('/panel');
         return;
       }
@@ -119,7 +121,7 @@ export default function ConfiguracionPage() {
     );
   }
 
-  const ActiveTabIcon = tabs.find(t => t.id === activeTab)?.icon || Settings;
+  const ActiveTabIcon = allTabs.find(t => t.id === activeTab)?.icon || Settings;
 
   return (
     <div className="space-y-6">
@@ -132,16 +134,16 @@ export default function ConfiguracionPage() {
           <div>
             <h1 className="text-2xl font-bold">Configuración del Sistema</h1>
             <p className="text-white/70 text-sm">
-              Solo accesible para Super Administrador • {profile.first_name} {profile.last_name}
+              Solo accesible para {profile.role === 'SUPER_ADMIN' ? 'Super Administrador' : 'Usuarios Internos'} • {profile.first_name} {profile.last_name}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
+      {/* Tabs Navigation - Solo SUPER_ADMIN ve todas las allTabs */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex overflow-x-auto border-b border-slate-200">
-          {tabs.map((tab) => {
+          {(profile?.role === 'SUPER_ADMIN' ? allTabs : allTabs.filter(t => t.id === 'seguridad')).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
 
@@ -176,10 +178,10 @@ export default function ConfiguracionPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
-                {tabs.find(t => t.id === activeTab)?.label}
+                {allTabs.find(t => t.id === activeTab)?.label}
               </h2>
               <p className="text-sm text-slate-500">
-                {tabs.find(t => t.id === activeTab)?.description}
+                {allTabs.find(t => t.id === activeTab)?.description}
               </p>
             </div>
           </div>
@@ -197,7 +199,7 @@ export default function ConfiguracionPage() {
 
           {activeTab === 'seguridad' && (
             <div className="bg-slate-900/50 rounded-2xl p-6 border border-white/10">
-              <SeguridadTab />
+              <SeguridadTab userRole={profile?.role || 'CLIENT'} />
             </div>
           )}
 

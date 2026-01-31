@@ -143,16 +143,16 @@ export async function PUT(request: NextRequest) {
    }
   }
 
-  // Actualizar cada key
+  // Actualizar o insertar cada key (upsert)
   for (const update of updates) {
    const { error: updateError } = await supabase
     .from('security_config')
-    .update({
+    .upsert({
+     key: update.key,
      value: update.value,
      updated_at: new Date().toISOString(),
      updated_by: userId,
-    })
-    .eq('key', update.key);
+    }, { onConflict: 'key' });
 
    if (updateError) {
     console.error(`Error updating ${update.key}:`, updateError);
