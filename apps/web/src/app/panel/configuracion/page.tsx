@@ -20,6 +20,7 @@ import InfoNegocioTab from './components/InfoNegocioTab';
 import NotificacionesTab from './components/NotificacionesTab';
 import SeguridadTab from './components/SeguridadTab';
 import MiCuentaTab from './components/MiCuentaTab';
+import AgenteIATab from './components/AgenteIATab';
 
 // Tipos
 interface UserProfile {
@@ -217,10 +218,8 @@ export default function ConfiguracionPage() {
           )}
 
           {activeTab === 'agente' && (
-            <div className="text-center py-12 text-slate-400">
-              <Bot size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Configuración del Agente IA</p>
-              <p className="text-sm mt-2">Se implementará en la Fase 7</p>
+            <div className="bg-slate-900/50 rounded-2xl p-6 border border-white/10">
+              <AgenteIATab />
             </div>
           )}
         </div>

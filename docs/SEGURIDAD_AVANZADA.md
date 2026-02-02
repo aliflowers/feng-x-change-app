@@ -1,7 +1,7 @@
 # 🔐 Plan de Seguridad Avanzada - FengXchange
 
 > **Fecha:** 1 de Febrero, 2026  
-> **Versión:** 3.0 (Control de Sesiones implementado)  
+> **Versión:** 4.0 (Cifrado TOTP + Mi Cuenta implementado)  
 > **Stack:** Next.js + Railway + Supabase
 
 ---
@@ -12,10 +12,12 @@
 2. [Estado de Implementación](#estado-de-implementación)
 3. [Middleware Hardening](#1-middleware-hardening)
 4. [Autenticación 2FA](#2-autenticación-2fa)
-5. [Logs de Auditoría](#3-logs-de-auditoría)
-6. [Alertas de Login Fallido](#4-alertas-de-login-fallido)
-7. [Control de Sesiones](#5-control-de-sesiones)
-8. [Plantilla WhatsApp Requerida](#plantilla-whatsapp-para-alertas)
+5. [Cifrado de Secreto TOTP](#3-cifrado-de-secreto-totp)
+6. [Logs de Auditoría](#4-logs-de-auditoría)
+7. [Alertas de Login Fallido](#5-alertas-de-login-fallido)
+8. [Control de Sesiones](#6-control-de-sesiones)
+9. [Mi Cuenta - Cambio de Credenciales](#7-mi-cuenta---cambio-de-credenciales)
+10. [Plantilla WhatsApp Requerida](#plantilla-whatsapp-para-alertas)
 
 ---
 
@@ -26,9 +28,11 @@
 | **Middleware Hardening** | Headers de seguridad, anti-spoofing, blacklist | ✅ Implementado |
 | **GeoIP Tracking** | Ubicación de usuarios por IP (país/ciudad) | ✅ Implementado |
 | **2FA Dual** | Email + Google Authenticator (TOTP) | ✅ Implementado |
+| **Cifrado TOTP** | Secreto cifrado con AES-256-GCM en BD | ✅ Implementado |
 | **Logs de Auditoría API** | Endpoint para listar y purgar logs | ✅ Implementado |
 | **Alertas de Login** | Notificaciones Email + WhatsApp por intentos fallidos | ✅ Implementado |
 | **Control de Sesiones** | Timeout por inactividad (1h) + Sesión máxima (24h) | ✅ Implementado |
+| **Mi Cuenta** | Cambio de email/contraseña con verificación 2FA | ✅ Implementado |
 
 ---
 
@@ -42,13 +46,17 @@
 | `src/lib/geoip.ts` | Servicio de geolocalización por IP |
 | `src/lib/two-factor-auth.ts` | Servicio 2FA (TOTP + Email + Backup codes) |
 | `src/lib/security-alerts.ts` | Servicio de alertas de seguridad |
-| `src/lib/session-config.ts` | **NUEVO** - Control de sesiones (timeout + expiración) |
-| `src/app/api/auth/2fa/setup/route.ts` | Iniciar configuración 2FA |
+| `src/lib/session-config.ts` | Control de sesiones (timeout + expiración) |
+| `src/lib/crypto.ts` | **Cifrado AES-256-GCM para datos sensibles** |
+| `src/app/api/auth/2fa/setup/route.ts` | Iniciar configuración 2FA (cifra secreto) |
 | `src/app/api/auth/2fa/verify/route.ts` | Verificar código durante setup |
-| `src/app/api/auth/2fa/disable/route.ts` | Deshabilitar 2FA |
-| `src/app/api/auth/pre-login/route.ts` | **NUEVO** - Pre-autenticación segura con 2FA |
-| `src/app/api/auth/2fa/verify-login/route.ts` | **NUEVO** - Verificar 2FA y crear sesión |
+| `src/app/api/auth/2fa/verify-login/route.ts` | Verificar 2FA y crear sesión |
+| `src/app/api/auth/2fa/disable/route.ts` | Deshabilitar 2FA (requiere código) |
+| `src/app/api/auth/pre-login/route.ts` | Pre-autenticación segura con 2FA |
+| `src/app/api/auth/change-email/route.ts` | **NUEVO** - Cambiar email (solo SUPER_ADMIN) |
+| `src/app/api/auth/change-password/route.ts` | **NUEVO** - Cambiar contraseña (roles internos) |
 | `src/app/api/admin/audit-logs/route.ts` | Listar y purgar logs |
+| `src/app/panel/configuracion/components/MiCuentaTab.tsx` | **NUEVO** - UI de cambio de credenciales |
 
 ### Dependencias Instaladas
 
@@ -64,7 +72,7 @@ pnpm add otpauth qrcode geoip-lite @types/qrcode jsonwebtoken @types/jsonwebtoke
 ### Columnas Añadidas a `profiles`
 
 - `two_factor_method` (none/email/totp)
-- `two_factor_secret` (encrypted)
+- `two_factor_secret` (**cifrado con AES-256-GCM**)
 - `two_factor_verified` (boolean)
 - `two_factor_backup_codes` (text[])
 
@@ -139,7 +147,60 @@ function getClientIP(request: NextRequest): string {
 
 ---
 
-## 3. Logs de Auditoría
+## 3. Cifrado de Secreto TOTP
+
+> [!IMPORTANT]
+> El secreto TOTP ahora se cifra con **AES-256-GCM** antes de almacenarse en la base de datos, eliminando una vulnerabilidad crítica donde el secreto se guardaba en texto plano.
+
+### Implementación
+
+**Archivo:** `src/lib/crypto.ts`
+
+```typescript
+// Cifrado
+export async function encrypt(plaintext: string): Promise<string> {
+  // Retorna formato: "iv:authTag:ciphertext" (hex)
+}
+
+// Descifrado
+export async function decrypt(encryptedText: string): Promise<string> {
+  // Espera formato: "iv:authTag:ciphertext"
+}
+
+// Detectar formato cifrado
+export function isEncrypted(text: string): boolean {
+  // Verifica si tiene 3 partes hex válidas
+}
+```
+
+### Flujo de Cifrado
+
+| Operación | Antes | Después |
+|-----------|-------|---------|
+| **Setup 2FA** | Guardaba `secret` en texto plano | Guarda `encrypt(secret)` cifrado |
+| **Verificar TOTP** | Usaba `secret` directamente | Usa `decrypt(secret)` primero |
+
+### Compatibilidad Hacia Atrás
+
+La función `isEncrypted()` detecta automáticamente el formato:
+- **Secretos antiguos** (texto plano): Se usan directamente
+- **Secretos nuevos** (cifrados): Se desencriptan antes de usar
+
+> [!CAUTION]
+> **Para usuarios con 2FA configurado antes de esta actualización:** Deberán reconfigurar su 2FA para que el secreto quede cifrado.
+
+### Endpoints Actualizados
+
+- `setup/route.ts` - Cifra secreto al guardar
+- `verify/route.ts` - Desencripta antes de verificar
+- `verify-login/route.ts` - Desencripta antes de verificar
+- `disable/route.ts` - Desencripta antes de verificar
+- `change-email/route.ts` - Desencripta al verificar 2FA
+- `change-password/route.ts` - Desencripta al verificar 2FA
+
+---
+
+## 4. Logs de Auditoría
 
 ### Endpoint: `/api/admin/audit-logs`
 
@@ -164,7 +225,7 @@ Query params: page, limit, action, user_id, resource_type, from, to
 
 ---
 
-## 4. Alertas de Login Fallido
+## 5. Alertas de Login Fallido
 
 ### Flujo de Detección
 
@@ -185,7 +246,7 @@ Query params: page, limit, action, user_id, resource_type, from, to
 
 ---
 
-## 5. Control de Sesiones
+## 6. Control de Sesiones
 
 ### Configuración
 
@@ -211,30 +272,40 @@ export const WARNING_BEFORE_LOGOUT_MS = 5 * 60 * 1000;    // 5 minutos
 2. **Al navegar entre páginas:** Se verifica expiración y actualiza última actividad
 3. **Si expira:** Se cierra sesión y redirige a `/backoffice` con mensaje
 
-### Páginas con Control de Sesión Activo
+---
 
-| Página | Estado |
-|--------|--------|
-| `/panel` (Dashboard) | ✅ Activo |
-| `/panel/pool` | ✅ Activo |
-| `/panel/operaciones` | ✅ Activo |
-| `/panel/clientes` | ✅ Activo |
-| `/panel/bancos` | ✅ Activo |
-| `/panel/tasas` | ✅ Activo |
-| `/panel/configuracion` | ✅ Activo |
-| `/panel/comisiones` | ⚠️ **PENDIENTE** - Página no desarrollada |
-| `/panel/usuarios` | ⚠️ **PENDIENTE** - Página no desarrollada |
-| `/panel/ganancias` | ⚠️ **PENDIENTE** - Página no desarrollada |
+## 7. Mi Cuenta - Cambio de Credenciales
 
-> [!IMPORTANT]
-> Cuando se desarrollen las páginas `/panel/comisiones`, `/panel/usuarios` y `/panel/ganancias`, el control de sesión se aplicará automáticamente ya que están bajo el layout de `/panel`.
+> [!NOTE]
+> Nueva funcionalidad para permitir a usuarios internos cambiar sus credenciales de forma segura, requiriendo verificación 2FA.
 
-### Mensajes al Usuario
+### Endpoints
 
-Cuando la sesión expira, el usuario es redirigido a `/backoffice` con un mensaje amigable:
+| Endpoint | Método | Roles Permitidos |
+|----------|--------|------------------|
+| `/api/auth/change-email` | POST | Solo SUPER_ADMIN |
+| `/api/auth/change-password` | POST | Todos los roles internos |
 
-- **Por inactividad:** "Tu sesión expiró por inactividad. Por seguridad, debes iniciar sesión nuevamente."
-- **Por tiempo máximo:** "Tu sesión ha expirado. Por seguridad, debes iniciar sesión nuevamente."
+### Requisitos de Seguridad
+
+1. **2FA Obligatorio**: Debe tener 2FA habilitado y verificado
+2. **Código 2FA Válido**: Requiere código de Google Authenticator o código de respaldo
+3. **Validación de Contraseña**:
+   - Mínimo 8 caracteres
+   - Al menos 1 mayúscula
+   - Al menos 1 minúscula
+   - Al menos 1 número
+   - Al menos 1 carácter especial
+
+### Componente Frontend
+
+**Archivo:** `src/app/panel/configuracion/components/MiCuentaTab.tsx`
+
+**Características:**
+- Formulario unificado con toggles para activar cada tipo de cambio
+- Medidor visual de fortaleza de contraseña (5 criterios)
+- Mensaje de bloqueo si no tiene 2FA configurado
+- Campo único de verificación 2FA al final
 
 ---
 
@@ -297,6 +368,7 @@ Cuando la sesión expira, el usuario es redirigido a `/backoffice` con un mensaj
 - [x] Componente frontend `SegundoFactorSetup.tsx`
 - [x] Flujo de login seguro con pre-autenticación
 - [x] Encriptación de credenciales con AES-256-GCM
+- [x] **Cifrado de secreto TOTP en BD**
 
 ### Fase C: Logs de Auditoría ✅
 - [x] Endpoint `/api/admin/audit-logs` (GET + DELETE)
@@ -321,16 +393,22 @@ Cuando la sesión expira, el usuario es redirigido a `/backoffice` con un mensaj
 - [x] Verificación en layout de `/panel`
 - [x] Limpieza de datos en logout
 
+### Fase F: Mi Cuenta ✅
+- [x] Endpoint `/api/auth/change-email` (solo SUPER_ADMIN)
+- [x] Endpoint `/api/auth/change-password` (roles internos)
+- [x] Verificación 2FA obligatoria para cambios
+- [x] Validación de fortaleza de contraseña
+- [x] Componente `MiCuentaTab.tsx` con toggles
+- [x] Registro en audit_logs
+
 ---
 
 ## Próximos Pasos
 
 1. **Plantilla WhatsApp**: Crear y aprobar plantilla `alerta_seguridad` en Meta Business
 2. **Páginas Pendientes**: Al desarrollar `/panel/comisiones`, `/panel/usuarios` y `/panel/ganancias`, el control de sesión se aplicará automáticamente
-3. **Fase 6: Mi Cuenta**: Implementar cambio de email y contraseña
-4. **Fase 7: Agente IA**: Bot de WhatsApp con OpenAI
+3. **Fase 7: Agente IA para WhatsApp**: Bot de WhatsApp con OpenAI para auto-registro de operaciones
 
 ---
 
 *Última actualización: 1 de Febrero, 2026*
-
