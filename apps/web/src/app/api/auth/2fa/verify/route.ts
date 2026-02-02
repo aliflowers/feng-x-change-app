@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server-cookies';
 import { verifyTOTPCode } from '@/lib/two-factor-auth';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
  try {
@@ -68,8 +69,12 @@ export async function POST(request: NextRequest) {
   let isValid = false;
 
   if (profile.two_factor_method === 'totp') {
-   // Verificar código TOTP
-   isValid = verifyTOTPCode(code, profile.two_factor_secret);
+   // SEGURIDAD: Desencriptar secreto antes de verificar
+   let secret = profile.two_factor_secret;
+   if (isEncrypted(secret)) {
+    secret = await decrypt(secret);
+   }
+   isValid = verifyTOTPCode(code, secret);
   } else if (profile.two_factor_method === 'email') {
    // Verificar código email (guardado en two_factor_secret)
    isValid = code === profile.two_factor_secret;

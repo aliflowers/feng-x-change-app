@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server-cookies';
 import { verifyTOTPCode, verifyBackupCode } from '@/lib/two-factor-auth';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
  try {
@@ -57,9 +58,14 @@ export async function POST(request: NextRequest) {
 
   let isValid = false;
 
-  // Primero intentar como código TOTP/email
+  // Primero intentar como código TOTP
   if (profile.two_factor_method === 'totp' && profile.two_factor_secret) {
-   isValid = verifyTOTPCode(code, profile.two_factor_secret);
+   // SEGURIDAD: Desencriptar secreto si está cifrado
+   let secret = profile.two_factor_secret;
+   if (isEncrypted(secret)) {
+    secret = await decrypt(secret);
+   }
+   isValid = verifyTOTPCode(code, secret);
   }
 
   // Si no es válido, intentar como código de respaldo

@@ -19,6 +19,7 @@ import ParametrosTab from './components/ParametrosTab';
 import InfoNegocioTab from './components/InfoNegocioTab';
 import NotificacionesTab from './components/NotificacionesTab';
 import SeguridadTab from './components/SeguridadTab';
+import MiCuentaTab from './components/MiCuentaTab';
 
 // Tipos
 interface UserProfile {
@@ -27,6 +28,8 @@ interface UserProfile {
   last_name: string;
   email: string;
   role: 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR' | 'CLIENT';
+  two_factor_method?: 'none' | 'email' | 'totp';
+  two_factor_verified?: boolean;
 }
 
 type TabId = 'parametros' | 'notificaciones' | 'negocio' | 'seguridad' | 'cuenta' | 'agente';
@@ -69,7 +72,7 @@ export default function ConfiguracionPage() {
 
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email, role')
+        .select('id, first_name, last_name, email, role, two_factor_method, two_factor_verified')
         .eq('id', user.id)
         .single();
 
@@ -204,10 +207,12 @@ export default function ConfiguracionPage() {
           )}
 
           {activeTab === 'cuenta' && (
-            <div className="text-center py-12 text-slate-400">
-              <User size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Gestión de credenciales</p>
-              <p className="text-sm mt-2">Se implementará en la Fase 6</p>
+            <div className="bg-slate-900/50 rounded-2xl p-6 border border-white/10">
+              <MiCuentaTab
+                userRole={profile?.role as 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR'}
+                userEmail={profile?.email || ''}
+                user2FAEnabled={profile?.two_factor_method !== 'none' && profile?.two_factor_verified === true}
+              />
             </div>
           )}
 

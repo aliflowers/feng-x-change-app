@@ -21,6 +21,7 @@ import {
  formatBackupCodes,
  type TwoFactorMethod,
 } from '@/lib/two-factor-auth';
+import { encrypt } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
  try {
@@ -79,12 +80,15 @@ export async function POST(request: NextRequest) {
    const uri = generateTOTPUri(profile?.email || user.email || '', secret);
    const qrCodeImage = await generateQRCode(uri);
 
-   // Guardar secret temporalmente (sin verificar aún)
+   // SEGURIDAD: Cifrar el secreto con AES-256-GCM antes de guardar en BD
+   const encryptedSecret = await encrypt(secret);
+
+   // Guardar secret cifrado (sin verificar aún)
    const { error: updateError } = await supabase
     .from('profiles')
     .update({
      two_factor_method: 'totp',
-     two_factor_secret: secret,
+     two_factor_secret: encryptedSecret,
      two_factor_verified: false,
      two_factor_backup_codes: hashedBackupCodes,
     })
@@ -117,7 +121,7 @@ export async function POST(request: NextRequest) {
     .from('profiles')
     .update({
      two_factor_method: 'email',
-     two_factor_secret: code, // Usamos el campo secret para guardar el código temporal
+     two_factor_secret: code, // Código temporal de email (no necesita cifrado)
      two_factor_verified: false,
      two_factor_backup_codes: hashedBackupCodes,
     })

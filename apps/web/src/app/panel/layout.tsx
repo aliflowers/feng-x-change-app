@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { checkSessionExpiration, updateLastActivity, clearSessionData } from '@/lib/session-config';
 import {
   LayoutDashboard,
   Inbox,
@@ -74,6 +75,26 @@ export default function PanelLayout({
     loadBusinessConfig();
   }, []);
 
+  // Verificación de expiración de sesión al navegar
+  useEffect(() => {
+    const { expired, reason } = checkSessionExpiration();
+
+    if (expired) {
+      // Limpiar datos y redirigir
+      clearSessionData();
+      supabase.auth.signOut();
+
+      const reasonParam = reason === 'inactivity'
+        ? 'inactivity'
+        : 'session_expired';
+      router.push(`/backoffice?reason=${reasonParam}`);
+      return;
+    }
+
+    // Actualizar última actividad al navegar
+    updateLastActivity();
+  }, [pathname]);
+
   const loadBusinessConfig = async () => {
     try {
       const response = await fetch('/api/public/business');
@@ -122,6 +143,7 @@ export default function PanelLayout({
   };
 
   const handleLogout = async () => {
+    clearSessionData();
     await supabase.auth.signOut();
     router.push('/backoffice');
   };
@@ -161,6 +183,16 @@ export default function PanelLayout({
   };
 
   if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-slate-300 border-t-slate-800 rounded-full"></div>
+      </div>
+    );
+  }
+
+  // Si no hay perfil después de cargar, redirigir al login
+  if (!profile) {
+    router.push('/backoffice');
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-slate-300 border-t-slate-800 rounded-full"></div>

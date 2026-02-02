@@ -1,7 +1,7 @@
 # 🔐 Plan de Seguridad Avanzada - FengXchange
 
-> **Fecha:** 30 de Enero, 2026  
-> **Versión:** 2.0 (Actualizado - Implementado)  
+> **Fecha:** 1 de Febrero, 2026  
+> **Versión:** 3.0 (Control de Sesiones implementado)  
 > **Stack:** Next.js + Railway + Supabase
 
 ---
@@ -14,7 +14,8 @@
 4. [Autenticación 2FA](#2-autenticación-2fa)
 5. [Logs de Auditoría](#3-logs-de-auditoría)
 6. [Alertas de Login Fallido](#4-alertas-de-login-fallido)
-7. [Plantilla WhatsApp Requerida](#plantilla-whatsapp-para-alertas)
+7. [Control de Sesiones](#5-control-de-sesiones)
+8. [Plantilla WhatsApp Requerida](#plantilla-whatsapp-para-alertas)
 
 ---
 
@@ -27,6 +28,7 @@
 | **2FA Dual** | Email + Google Authenticator (TOTP) | ✅ Implementado |
 | **Logs de Auditoría API** | Endpoint para listar y purgar logs | ✅ Implementado |
 | **Alertas de Login** | Notificaciones Email + WhatsApp por intentos fallidos | ✅ Implementado |
+| **Control de Sesiones** | Timeout por inactividad (1h) + Sesión máxima (24h) | ✅ Implementado |
 
 ---
 
@@ -40,15 +42,18 @@
 | `src/lib/geoip.ts` | Servicio de geolocalización por IP |
 | `src/lib/two-factor-auth.ts` | Servicio 2FA (TOTP + Email + Backup codes) |
 | `src/lib/security-alerts.ts` | Servicio de alertas de seguridad |
+| `src/lib/session-config.ts` | **NUEVO** - Control de sesiones (timeout + expiración) |
 | `src/app/api/auth/2fa/setup/route.ts` | Iniciar configuración 2FA |
 | `src/app/api/auth/2fa/verify/route.ts` | Verificar código durante setup |
 | `src/app/api/auth/2fa/disable/route.ts` | Deshabilitar 2FA |
+| `src/app/api/auth/pre-login/route.ts` | **NUEVO** - Pre-autenticación segura con 2FA |
+| `src/app/api/auth/2fa/verify-login/route.ts` | **NUEVO** - Verificar 2FA y crear sesión |
 | `src/app/api/admin/audit-logs/route.ts` | Listar y purgar logs |
 
 ### Dependencias Instaladas
 
 ```bash
-pnpm add otpauth qrcode geoip-lite @types/qrcode
+pnpm add otpauth qrcode geoip-lite @types/qrcode jsonwebtoken @types/jsonwebtoken
 ```
 
 ### Tablas BD Creadas
@@ -112,18 +117,25 @@ function getClientIP(request: NextRequest): string {
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
+| `/api/auth/pre-login` | POST | Valida credenciales SIN crear sesión |
+| `/api/auth/2fa/verify-login` | POST | Verifica 2FA y crea sesión segura |
 | `/api/auth/2fa/setup` | POST | Iniciar configuración (genera QR o envía email) |
 | `/api/auth/2fa/verify` | POST | Verificar código durante setup |
 | `/api/auth/2fa/disable` | POST | Deshabilitar 2FA (requiere código) |
 
-### Flujo de Configuración
+### Flujo de Login Seguro con 2FA
 
-1. Usuario selecciona método (Email o TOTP)
-2. Para TOTP: Se genera QR code para escanear
-3. Para Email: Se envía código de 6 dígitos
-4. Usuario verifica con código
-5. Se generan 8 códigos de respaldo
-6. 2FA queda activo
+```
+1. Usuario ingresa email + password
+2. /api/auth/pre-login valida credenciales SIN crear sesión
+3. Si tiene 2FA → Genera token JWT temporal (5 min, password encriptado AES-256)
+4. Usuario ingresa código 2FA
+5. /api/auth/2fa/verify-login desencripta password, verifica código
+6. Si correcto → Crea sesión real con signInWithPassword
+7. Frontend usa setSession para establecer sesión
+```
+
+> **Seguridad:** El password nunca se almacena en el cliente. Se encripta con AES-256-GCM dentro del token JWT temporal.
 
 ---
 
@@ -170,6 +182,59 @@ Query params: page, limit, action, user_id, resource_type, from, to
 - IP del atacante
 - País y ciudad (geolocalización)
 - Fecha y hora
+
+---
+
+## 5. Control de Sesiones
+
+### Configuración
+
+| Parámetro | Valor | Descripción |
+|-----------|-------|-------------|
+| **Timeout por inactividad** | 1 hora | Sesión expira si no hay navegación |
+| **Sesión máxima** | 24 horas | Sesión expira sin importar actividad |
+| **Advertencia** | 5 minutos antes | Tiempo para mostrar modal de advertencia |
+
+### Archivo de Configuración
+
+`src/lib/session-config.ts`
+
+```typescript
+export const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;      // 1 hora
+export const MAX_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
+export const WARNING_BEFORE_LOGOUT_MS = 5 * 60 * 1000;    // 5 minutos
+```
+
+### Funcionamiento
+
+1. **Al hacer login exitoso:** Se guardan timestamps en localStorage
+2. **Al navegar entre páginas:** Se verifica expiración y actualiza última actividad
+3. **Si expira:** Se cierra sesión y redirige a `/backoffice` con mensaje
+
+### Páginas con Control de Sesión Activo
+
+| Página | Estado |
+|--------|--------|
+| `/panel` (Dashboard) | ✅ Activo |
+| `/panel/pool` | ✅ Activo |
+| `/panel/operaciones` | ✅ Activo |
+| `/panel/clientes` | ✅ Activo |
+| `/panel/bancos` | ✅ Activo |
+| `/panel/tasas` | ✅ Activo |
+| `/panel/configuracion` | ✅ Activo |
+| `/panel/comisiones` | ⚠️ **PENDIENTE** - Página no desarrollada |
+| `/panel/usuarios` | ⚠️ **PENDIENTE** - Página no desarrollada |
+| `/panel/ganancias` | ⚠️ **PENDIENTE** - Página no desarrollada |
+
+> [!IMPORTANT]
+> Cuando se desarrollen las páginas `/panel/comisiones`, `/panel/usuarios` y `/panel/ganancias`, el control de sesión se aplicará automáticamente ya que están bajo el layout de `/panel`.
+
+### Mensajes al Usuario
+
+Cuando la sesión expira, el usuario es redirigido a `/backoffice` con un mensaje amigable:
+
+- **Por inactividad:** "Tu sesión expiró por inactividad. Por seguridad, debes iniciar sesión nuevamente."
+- **Por tiempo máximo:** "Tu sesión ha expirado. Por seguridad, debes iniciar sesión nuevamente."
 
 ---
 
@@ -229,14 +294,15 @@ Query params: page, limit, action, user_id, resource_type, from, to
 - [x] Instalar dependencias: `otpauth`, `qrcode`
 - [x] Servicio `lib/two-factor-auth.ts`
 - [x] Endpoints `/api/auth/2fa/*` (setup, verify, disable)
-- [ ] Componente frontend `SegundoFactorSetup.tsx` (pendiente)
-- [ ] Modificar flujo de login para pedir 2FA (pendiente)
+- [x] Componente frontend `SegundoFactorSetup.tsx`
+- [x] Flujo de login seguro con pre-autenticación
+- [x] Encriptación de credenciales con AES-256-GCM
 
 ### Fase C: Logs de Auditoría ✅
 - [x] Endpoint `/api/admin/audit-logs` (GET + DELETE)
 - [x] Paginación y filtros
-- [ ] Página `/panel/admin/audit` (pendiente)
-- [ ] Exportar CSV (pendiente)
+- [x] Página `/panel/admin/audit`
+- [x] Exportar CSV
 
 ### Fase D: Alertas de Login Fallido ✅
 - [x] Migración BD: tabla `failed_login_attempts`
@@ -246,15 +312,25 @@ Query params: page, limit, action, user_id, resource_type, from, to
 - [x] Envío de alerta por WhatsApp
 - [ ] **Crear plantilla WhatsApp `alerta_seguridad`** ⚠️ PENDIENTE
 
+### Fase E: Control de Sesiones ✅
+- [x] Servicio `lib/session-config.ts`
+- [x] Timeout por inactividad (1 hora)
+- [x] Sesión máxima (24 horas)
+- [x] Mensaje de sesión expirada en login
+- [x] Inicialización de sesión en login
+- [x] Verificación en layout de `/panel`
+- [x] Limpieza de datos en logout
+
 ---
 
 ## Próximos Pasos
 
-1. **Frontend 2FA**: Crear componente de configuración y pantalla de verificación durante login
-2. **UI Audit Logs**: Crear página `/panel/admin/audit` con tabla, filtros y exportación
-3. **Plantilla WhatsApp**: Crear y aprobar plantilla `alerta_seguridad` en Meta Business
-4. **Testing**: Probar flujo completo de 2FA y alertas
+1. **Plantilla WhatsApp**: Crear y aprobar plantilla `alerta_seguridad` en Meta Business
+2. **Páginas Pendientes**: Al desarrollar `/panel/comisiones`, `/panel/usuarios` y `/panel/ganancias`, el control de sesión se aplicará automáticamente
+3. **Fase 6: Mi Cuenta**: Implementar cambio de email y contraseña
+4. **Fase 7: Agente IA**: Bot de WhatsApp con OpenAI
 
 ---
 
-*Última actualización: 30 de Enero, 2026*
+*Última actualización: 1 de Febrero, 2026*
+
