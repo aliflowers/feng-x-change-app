@@ -82,6 +82,33 @@ export interface ClientContext {
 }
 
 // =========================================================================
+// Contexto mejorado con estado de operación (Fase 2 refactorización)
+// =========================================================================
+export type OperationFlowState =
+ | 'idle'
+ | 'selecting_beneficiary'
+ | 'confirming_amount'
+ | 'selecting_payment_method'
+ | 'awaiting_proof'
+ | 'creating_operation';
+
+export interface OperationDraft {
+ beneficiaryId?: string;
+ beneficiaryName?: string;
+ amount?: number;
+ fromCurrency?: string;
+ toCurrency?: string;
+ selectedPaymentMethod?: string;
+ exchangeRate?: number;
+}
+
+export interface EnhancedClientContext extends ClientContext {
+ currentFlowState: OperationFlowState;
+ operationDraft: OperationDraft | null;
+ conversationSummary: string[]; // Últimas 3 interacciones clave
+}
+
+// =========================================================================
 // Mensaje entrante
 // =========================================================================
 export type IncomingMessage =

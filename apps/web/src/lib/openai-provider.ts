@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import type {
   AIConfig,
   ClientContext,
+  EnhancedClientContext,
   ExtractedPaymentData,
   ChatMessage,
 } from '@/types/ai-types';
@@ -125,27 +126,55 @@ export class OpenAIProvider implements AIProvider {
     }
   }
 
-  private buildSystemPrompt(context: ClientContext): string {
+  private buildSystemPrompt(context: ClientContext | EnhancedClientContext): string {
     let prompt = this.config.system_prompt || '';
 
     // Añadir contexto del cliente
     if (context.isRegistered) {
       prompt += `
 
-CONTEXTO DEL CLIENTE REGISTRADO:
+# CONTEXTO DEL CLIENTE ACTUAL
 - Nombre: ${context.clientName}
 - Email: ${context.clientEmail || 'No registrado'}
 - Documento: ${context.clientDocument || 'No registrado'}
 - Teléfono: ${context.phoneNumber}
-- Estado: Cliente verificado en el sistema
-
-RECUERDA: Nunca muestres IDs internos (UUID) al cliente. Solo usa los datos de arriba para personalizar tus respuestas.`;
+- Estado: Cliente verificado ✓`;
     } else {
       prompt += `
 
-NOTA: Este usuario NO está registrado en el sistema. 
+# NOTA: Usuario NO registrado
 Teléfono: ${context.phoneNumber}
-Puedes responder consultas de tasas pero NO puedes crear operaciones.`;
+Puedes responder consultas de tasas pero NO crear operaciones.`;
+    }
+
+    // Inyectar estado de operación si existe (EnhancedClientContext)
+    if ('currentFlowState' in context && context.currentFlowState !== 'idle') {
+      const enhanced = context as EnhancedClientContext;
+      prompt += `
+
+# ESTADO DE OPERACIÓN EN CURSO
+Fase actual: ${enhanced.currentFlowState}`;
+
+      if (enhanced.operationDraft) {
+        const draft = enhanced.operationDraft;
+        prompt += `
+Datos recopilados:
+- Beneficiario: ${draft.beneficiaryName || 'No seleccionado'}
+- Monto: ${draft.amount ? `${draft.amount} ${draft.fromCurrency || ''}` : 'No indicado'}
+- Método pago: ${draft.selectedPaymentMethod || 'No seleccionado'}
+- Tasa: ${draft.exchangeRate || 'No consultada'}`;
+      }
+
+      if (enhanced.conversationSummary && enhanced.conversationSummary.length > 0) {
+        prompt += `
+
+Resumen reciente:
+${enhanced.conversationSummary.join('\n')}`;
+      }
+
+      prompt += `
+
+IMPORTANTE: NO repitas preguntas sobre datos ya recopilados.`;
     }
 
     return prompt;
