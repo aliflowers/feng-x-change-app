@@ -180,19 +180,43 @@ function generateFallbackMessage(transaction: any): string {
 
 /**
  * Envía mensaje por WhatsApp usando la API de Meta
+ * Lee credenciales desde notification_config en BD (consistente con el resto del proyecto)
  */
 async function sendWhatsAppNotification(phoneNumber: string, message: string): Promise<boolean> {
- const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
- const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
- if (!accessToken || !phoneNumberId) {
-  console.error('[Webhook] WhatsApp credentials not configured');
-  return false;
- }
-
  try {
+  const supabase = createServerClient();
+
+  // Obtener configuración de WhatsApp desde BD
+  const { data: waData } = await supabase
+   .from('notification_config')
+   .select('config')
+   .eq('provider', 'whatsapp')
+   .single();
+
+  if (!waData?.config) {
+   console.error('[Webhook] WhatsApp configuration not found in DB');
+   return false;
+  }
+
+  const waConfig = waData.config as {
+   access_token_encrypted?: string;
+   phone_number_id?: string;
+  };
+
+  if (!waConfig.access_token_encrypted || !waConfig.phone_number_id) {
+   console.error('[Webhook] WhatsApp credentials not configured in DB');
+   return false;
+  }
+
+  // Descifrar token si está encriptado
+  const { decrypt, isEncrypted } = await import('@/lib/crypto');
+  const accessToken = isEncrypted(waConfig.access_token_encrypted)
+   ? await decrypt(waConfig.access_token_encrypted)
+   : waConfig.access_token_encrypted;
+
+  // Enviar mensaje
   const response = await fetch(
-   `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+   `https://graph.facebook.com/v18.0/${waConfig.phone_number_id}/messages`,
    {
     method: 'POST',
     headers: {
