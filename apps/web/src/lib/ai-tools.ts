@@ -661,6 +661,14 @@ export async function createOperation(
     };
   }
 
+  // Registrar webhook para notificación cuando se complete la operación
+  // Esto habilita el sistema de eventos de la Fase 3
+  await supabase.from('operation_webhooks').insert({
+    transaction_id: transaction.id,
+    phone_number: args.client_phone,
+    status: 'pending'
+  });
+
   return {
     success: true,
     data: {
