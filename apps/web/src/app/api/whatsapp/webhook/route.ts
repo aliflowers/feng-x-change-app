@@ -255,9 +255,20 @@ async function processIncomingMessage(
   if (message.type === 'text' && message.text?.body) {
    messageContent = message.text.body;
   } else if (message.type === 'image' && message.image) {
-   // TODO: Descargar imagen y obtener URL para análisis
-   messageContent = message.image.caption || '[Imagen enviada]';
-   // TODO: Implementar descarga de media para análisis con Vision
+      // Descargar y analizar imagen con Vision API
+    console.log('Processing image:', { mediaId: message.image.id });
+    const imgUrl = await downloadWhatsAppMedia(message.image.id);
+    if (imgUrl) {
+      const imgProvider = new OpenAIProvider(aiConfig as AIConfig);
+      const paymentData = await imgProvider.analyzeImage(imgUrl, 'payment_proof');
+      if (paymentData && paymentData.confidence && paymentData.confidence > 0.5) {
+        messageContent = `[Comprobante] Monto: ${paymentData.amount || '?'} ${paymentData.currency || ''}, Ref: ${paymentData.reference || '?'}, Banco: ${paymentData.bank || '?'}`;
+      } else {
+        messageContent = message.image.caption || '[Imagen recibida]';
+      }
+    } else {
+      messageContent = message.image.caption || '[Error al descargar imagen]';
+    }
   } else {
    console.log('Unsupported message type:', message.type);
    return;
@@ -301,6 +312,94 @@ async function processIncomingMessage(
  } catch (error) {
   console.error('Error processing message with AI:', error);
   // No relanzar el error para no afectar el webhook
+ }
+}
+
+// =========================================================================
+// DESCARGA DE MEDIA DE WHATSAPP
+// =========================================================================
+
+/**
+ * Descarga una imagen de WhatsApp y la convierte a base64 para análisis con Vision
+ * @param mediaId - ID del media proporcionado por WhatsApp
+ * @returns URL de datos base64 o null si falla
+ */
+async function downloadWhatsAppMedia(mediaId: string): Promise<string | null> {
+ const supabase = createServerClient();
+
+ try {
+  // Obtener token de WhatsApp
+  const { data: waData } = await supabase
+   .from('notification_config')
+   .select('config')
+   .eq('provider', 'whatsapp')
+   .single();
+
+  if (!waData?.config) {
+   console.error('WhatsApp configuration not found');
+   return null;
+  }
+
+  const waConfig = waData.config as { access_token_encrypted?: string };
+
+  if (!waConfig.access_token_encrypted) {
+   console.error('WhatsApp token not configured');
+   return null;
+  }
+
+  // Descifrar token
+  const { decrypt, isEncrypted } = await import('@/lib/crypto');
+  const token = isEncrypted(waConfig.access_token_encrypted)
+   ? await decrypt(waConfig.access_token_encrypted)
+   : waConfig.access_token_encrypted;
+
+  // Paso 1: Obtener la URL real del media
+  const mediaInfoResponse = await fetch(
+   `https://graph.facebook.com/v18.0/${mediaId}`,
+   {
+    headers: { 'Authorization': `Bearer ${token}` }
+   }
+  );
+
+  if (!mediaInfoResponse.ok) {
+   console.error('Error getting media info:', await mediaInfoResponse.text());
+   return null;
+  }
+
+  const mediaInfo = await mediaInfoResponse.json();
+  const mediaUrl = mediaInfo.url;
+
+  if (!mediaUrl) {
+   console.error('Media URL not found in response');
+   return null;
+  }
+
+  // Paso 2: Descargar el archivo binario
+  const downloadResponse = await fetch(mediaUrl, {
+   headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!downloadResponse.ok) {
+   console.error('Error downloading media:', await downloadResponse.text());
+   return null;
+  }
+
+  // Paso 3: Convertir a base64
+  const arrayBuffer = await downloadResponse.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString('base64');
+  const mimeType = downloadResponse.headers.get('content-type') || 'image/jpeg';
+
+  console.log('Media downloaded successfully:', {
+   mediaId,
+   mimeType,
+   sizeKB: Math.round(arrayBuffer.byteLength / 1024)
+  });
+
+  return `data:${mimeType};base64,${base64}`;
+
+ } catch (error) {
+  console.error('Error downloading WhatsApp media:', error);
+  return null;
  }
 }
 
@@ -372,3 +471,4 @@ async function sendWhatsAppMessage(
   console.error('Error sending WhatsApp message:', error);
  }
 }
+
