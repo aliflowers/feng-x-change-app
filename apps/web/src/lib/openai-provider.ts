@@ -63,9 +63,9 @@ export class OpenAIProvider implements AIProvider {
         ...history,
         { role: 'user', content: message }
       ],
-      // IMPORTANTE: gpt-5-nano NO soporta temperature
-      // Usar reasoning_effort en su lugar
-      ...(this.config.model === 'gpt-5-nano' ? {
+      // IMPORTANTE: Modelos GPT-5 (nano, mini) NO soportan temperature
+      // Usar reasoning_effort para gpt-5-nano, nada para gpt-5-mini
+      ...(this.config.model.startsWith('gpt-5') ? {
         reasoning_effort: this.config.reasoning_effort
       } : {
         temperature: 0.7
@@ -280,13 +280,19 @@ IMPORTANTE: NO repitas preguntas sobre datos ya recopilados.`;
         ...history,
         assistantMessage,
         ...toolResults,
-        // Instrucción explícita para evitar que devuelva JSON crudo
+        // Instrucción explícita para interpretar los resultados de las herramientas
         {
           role: 'user',
-          content: 'Responde en lenguaje natural, no en JSON. Formatea los datos de manera amigable para el usuario.'
+          content: `IMPORTANTE: Analiza los resultados de las herramientas anteriores y responde en español de forma natural y útil.
+- Si hay datos de beneficiarios, lista sus nombres y cuentas
+- Si hay tasas de cambio, muéstralas claramente
+- Si hay información del cliente, confírmale que está registrado y qué datos tiene
+- NO respondas con JSON, responde como humano
+- NO digas solo "He procesado tu solicitud", da información específica`
         }
       ],
-      ...(this.config.model === 'gpt-5-nano' ? {
+      // GPT-5 no soporta temperature
+      ...(this.config.model.startsWith('gpt-5') ? {
         reasoning_effort: this.config.reasoning_effort
       } : {
         temperature: 0.7

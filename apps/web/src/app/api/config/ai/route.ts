@@ -15,7 +15,7 @@ import type { AIConfigResponse } from '@/types/ai-types';
 // =========================================================================
 const updateConfigSchema = z.object({
  is_enabled: z.boolean().optional(),
- model: z.enum(['gpt-5-nano', 'gpt-4o', 'gpt-4o-mini']).optional(),
+ model: z.enum(['gpt-5-nano', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini']).optional(),
  system_prompt: z.string().optional(),
  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
  max_tokens: z.number().min(100).max(4000).optional(),

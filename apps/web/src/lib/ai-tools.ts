@@ -69,7 +69,7 @@ export const AI_TOOLS: Record<string, OpenAI.ChatCompletionTool> = {
     type: 'function',
     function: {
       name: 'get_client_beneficiaries',
-      description: 'Obtiene la lista de beneficiarios registrados del cliente.',
+      description: 'Obtiene la lista de beneficiarios registrados del cliente. IMPORTANTE: Cada beneficiario tiene un campo "id" (UUID) que DEBE usarse en create_operation. NUNCA uses el nombre del beneficiario, siempre usa el ID.',
       parameters: {
         type: 'object',
         properties: {
@@ -126,7 +126,7 @@ export const AI_TOOLS: Record<string, OpenAI.ChatCompletionTool> = {
           },
           beneficiary_id: {
             type: 'string',
-            description: 'ID del beneficiario seleccionado (obtenido de get_client_beneficiaries)'
+            description: 'Identificador del beneficiario: puede ser el UUID (campo "id") o el nombre/alias del beneficiario como aparece en get_client_beneficiaries'
           },
           proof_url: {
             type: 'string',
@@ -525,20 +525,71 @@ export async function createOperation(
   }
 
   // Obtener beneficiario con su moneda asociada
-  const { data: beneficiary } = await supabase
-    .from('user_bank_accounts')
-    .select(`
-      id,
-      account_holder,
-      banks_platforms!bank_platform_id (
-        currency_id,
-        currencies!currency_id (
-          code
+  // Primero intentamos buscar por UUID, si falla buscamos por nombre/alias
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.beneficiary_id);
+
+  let beneficiary;
+
+  if (isUUID) {
+    // Búsqueda por UUID (ideal)
+    const { data } = await supabase
+      .from('user_bank_accounts')
+      .select(`
+        id,
+        account_holder,
+        alias,
+        banks_platforms!bank_platform_id (
+          currency_id,
+          currencies!currency_id (
+            code
+          )
         )
-      )
-    `)
-    .eq('id', args.beneficiary_id)
-    .single();
+      `)
+      .eq('id', args.beneficiary_id)
+      .single();
+    beneficiary = data;
+  } else {
+    // Fallback: buscar por nombre o alias (el modelo puede pasar nombres)
+    // Primero obtenemos el profile para filtrar por usuario
+    const cleanPhone = args.client_phone.replace(/[^0-9]/g, '');
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('whatsapp_number', cleanPhone)
+      .single();
+
+    if (profile) {
+      // Buscar por account_holder o alias que coincida (case insensitive)
+      const searchName = args.beneficiary_id.toLowerCase().trim();
+      const { data: beneficiaries } = await supabase
+        .from('user_bank_accounts')
+        .select(`
+          id,
+          account_holder,
+          alias,
+          banks_platforms!bank_platform_id (
+            currency_id,
+            currencies!currency_id (
+              code
+            )
+          )
+        `)
+        .eq('user_id', profile.id)
+        .eq('is_active', true);
+
+      // Buscar coincidencia por nombre o alias
+      beneficiary = beneficiaries?.find(b =>
+        b.account_holder?.toLowerCase().includes(searchName) ||
+        b.alias?.toLowerCase().includes(searchName) ||
+        searchName.includes(b.account_holder?.toLowerCase() || '') ||
+        searchName.includes(b.alias?.toLowerCase() || '')
+      );
+
+      if (beneficiary) {
+        console.log(`[AI Tool] Beneficiario encontrado por nombre: "${args.beneficiary_id}" → ID: ${beneficiary.id}`);
+      }
+    }
+  }
 
   if (!beneficiary) {
     return {
@@ -582,7 +633,8 @@ export async function createOperation(
 
   // Obtener IDs de las monedas
   // Usamos un Set para evitar duplicados si from y to son iguales
-  const uniqueCurrencies = [...new Set([args.from_currency, args.to_currency])];
+  // IMPORTANTE: Usar to_currency (con fallback) en lugar de args.to_currency
+  const uniqueCurrencies = [...new Set([args.from_currency, to_currency])];
 
   const { data: currencies } = await supabase
     .from('currencies')
@@ -603,12 +655,12 @@ export async function createOperation(
   }
 
   const fromCurrencyId = currencies.find(c => c.code === args.from_currency)?.id;
-  const toCurrencyId = currencies.find(c => c.code === args.to_currency)?.id;
+  const toCurrencyId = currencies.find(c => c.code === to_currency)?.id;
 
   if (!fromCurrencyId || !toCurrencyId) {
     return {
       success: false,
-      error: { code: 'CURRENCY_NOT_FOUND', message: `Moneda no válida: from=${args.from_currency}, to=${args.to_currency}` }
+      error: { code: 'CURRENCY_NOT_FOUND', message: `Moneda no válida: from=${args.from_currency}, to=${to_currency}` }
     };
   }
 
@@ -624,7 +676,7 @@ export async function createOperation(
   if (!rate) {
     return {
       success: false,
-      error: { code: 'RATE_NOT_FOUND', message: `Tasa no disponible para ${args.from_currency} → ${args.to_currency}` }
+      error: { code: 'RATE_NOT_FOUND', message: `Tasa no disponible para ${args.from_currency} → ${to_currency}` }
     };
   }
 
