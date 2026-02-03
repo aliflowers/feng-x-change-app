@@ -42,7 +42,7 @@ export interface AIConfig {
  id: string;
  is_enabled: boolean;
  provider: 'openai';
- model: 'gpt-5-nano' | 'gpt-4o' | 'gpt-4o-mini';
+ model: 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-4o' | 'gpt-4o-mini';
  system_prompt: string | null;
  reasoning_effort: 'low' | 'medium' | 'high'; // NO temperature para gpt-5-nano
  max_tokens: number;

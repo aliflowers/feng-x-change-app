@@ -199,11 +199,41 @@ Puedes responder consultas de tasas pero NO puedes crear operaciones.`;
     const toolResults: OpenAI.ChatCompletionToolMessageParam[] = [];
 
     for (const toolCall of toolCalls) {
-      const args = JSON.parse(toolCall.function.arguments);
-      const result = await executeToolCall(
-        toolCall.function.name,
-        { ...args, client_phone: context.phoneNumber }
-      );
+      let result;
+      const toolName = toolCall.function.name;
+
+      try {
+        // Parsear argumentos con validación
+        const args = JSON.parse(toolCall.function.arguments);
+
+        console.log(`[AI Tool] Executing: ${toolName}`, { args });
+
+        // Ejecutar con timeout de 15 segundos
+        result = await Promise.race([
+          executeToolCall(toolName, { ...args, client_phone: context.phoneNumber }),
+          new Promise<{ success: false; error: { code: string; message: string } }>((_, reject) =>
+            setTimeout(() => reject(new Error(`TIMEOUT: ${toolName} tardó más de 15 segundos`)), 15000)
+          )
+        ]);
+
+        // Logging del resultado
+        if (result.success) {
+          console.log(`[AI Tool] Success: ${toolName}`, { dataLength: JSON.stringify(result.data).length });
+        } else {
+          console.warn(`[AI Tool] Failed: ${toolName}`, result.error);
+        }
+
+      } catch (error) {
+        // Capturar errores de parsing, timeout, u otros
+        console.error(`[AI Tool] Error executing ${toolName}:`, error);
+        result = {
+          success: false,
+          error: {
+            code: 'TOOL_EXECUTION_ERROR',
+            message: error instanceof Error ? error.message : 'Error desconocido ejecutando herramienta'
+          }
+        };
+      }
 
       toolResults.push({
         role: 'tool',

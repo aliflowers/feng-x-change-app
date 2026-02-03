@@ -280,18 +280,54 @@ export async function calculateAmount(
 
   const supabase = createServerClient();
 
+  // 1. Obtener IDs de las monedas por sus códigos
+  const { data: currencies, error: currencyError } = await supabase
+    .from('currencies')
+    .select('id, code')
+    .in('code', [args.from_currency.toUpperCase(), args.to_currency.toUpperCase()])
+    .eq('is_active', true);
+
+  if (currencyError || !currencies || currencies.length < 2) {
+    return {
+      success: false,
+      error: {
+        code: 'CURRENCY_NOT_FOUND',
+        message: `Moneda no encontrada: ${args.from_currency} o ${args.to_currency}`
+      }
+    };
+  }
+
+  // Crear mapa de código -> ID
+  const currencyMap = new Map(currencies.map(c => [c.code.toUpperCase(), c.id]));
+  const fromId = currencyMap.get(args.from_currency.toUpperCase());
+  const toId = currencyMap.get(args.to_currency.toUpperCase());
+
+  if (!fromId || !toId) {
+    return {
+      success: false,
+      error: {
+        code: 'CURRENCY_NOT_FOUND',
+        message: `Moneda no válida: ${!fromId ? args.from_currency : args.to_currency}`
+      }
+    };
+  }
+
+  // 2. Buscar tasa usando IDs (NO códigos)
   const { data: rate, error } = await supabase
     .from('exchange_rates')
     .select('rate')
-    .eq('from_currency', args.from_currency)
-    .eq('to_currency', args.to_currency)
+    .eq('from_currency_id', fromId)
+    .eq('to_currency_id', toId)
     .eq('is_active', true)
     .single();
 
   if (error || !rate) {
     return {
       success: false,
-      error: { code: 'RATE_NOT_FOUND', message: 'Tasa de cambio no encontrada para ese par de monedas' }
+      error: {
+        code: 'RATE_NOT_FOUND',
+        message: `No hay tasa de cambio disponible de ${args.from_currency} a ${args.to_currency}`
+      }
     };
   }
 
@@ -301,9 +337,9 @@ export async function calculateAmount(
     success: true,
     data: {
       amount_sent: args.amount,
-      from_currency: args.from_currency,
+      from_currency: args.from_currency.toUpperCase(),
       amount_received: Number(amount_received.toFixed(2)),
-      to_currency: args.to_currency,
+      to_currency: args.to_currency.toUpperCase(),
       rate_applied: rate.rate
     }
   };
