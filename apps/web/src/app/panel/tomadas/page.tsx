@@ -199,18 +199,36 @@ export default function TomadasPage() {
         .from('proofs')
         .getPublicUrl(fileName);
 
+      const proofUrl = publicUrlData.publicUrl;
+
       // Update transaction
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'COMPLETED',
-          payment_proof_url: publicUrlData.publicUrl,
+          payment_proof_url: proofUrl,
           payment_reference: paymentReference.trim(),
           paid_at: new Date().toISOString(),
         })
         .eq('id', selectedOperation.id);
 
       if (updateError) throw updateError;
+
+      // Send WhatsApp notification to client
+      try {
+        await fetch('/api/whatsapp/notify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: selectedOperation.id,
+            paymentReference: paymentReference.trim(),
+            proofUrl,
+          }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending WhatsApp notification:', notifyError);
+        // No bloqueamos el flujo si falla la notificación
+      }
 
       // Close modal and refresh
       setShowPaymentModal(false);

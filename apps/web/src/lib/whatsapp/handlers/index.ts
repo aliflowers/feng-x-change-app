@@ -42,6 +42,10 @@ import {
   handleSendUploadProof,
   handleProofReceived
 } from './send-flow';
+import {
+  handleBeneficiariesList,
+  handleBeneficiaryDetail
+} from './beneficiaries-flow';
 
 // ============================================================================
 // TIPOS DE MENSAJE ENTRANTES
@@ -200,11 +204,26 @@ async function routeByCurrentStep(
       break;
 
     case 'SEND_SHOW_ACCOUNT':
-      await handleSendShowAccountStep(session, message, phoneNumber);
+      await handleSendShowAccountStep(session, message, phoneNumber, userName);
       break;
 
     case 'SEND_UPLOAD_PROOF':
       await handleSendUploadProofStep(session, message, phoneNumber);
+      break;
+
+    // =========================================================================
+    // FLUJO: MIS BENEFICIARIOS
+    // =========================================================================
+    case 'BENEFICIARIES_LIST':
+      await handleBeneficiariesListStep(session, message, phoneNumber);
+      break;
+
+    case 'BENEFICIARIES_EMPTY':
+      await handleBeneficiariesEmptyStep(session, message, phoneNumber, userName);
+      break;
+
+    case 'BENEFICIARIES_DETAIL':
+      await handleBeneficiariesDetailStep(session, message, phoneNumber, userName);
       break;
 
     // =========================================================================
@@ -246,6 +265,9 @@ async function handleMainMenuStep(
         break;
       case 'SEND_SELECT_CURRENCY':
         await handleSendSelectCurrency(session, phoneNumber);
+        break;
+      case 'BENEFICIARIES_LIST':
+        await handleBeneficiariesList(session, phoneNumber);
         break;
     }
   }
@@ -373,11 +395,12 @@ async function handleSendSelectBeneficiaryStep(
   const supabase = createServerClient();
   const { data: benef } = await supabase
     .from('user_bank_accounts')
-    .select('account_holder_name')
+    .select('account_holder, alias')
     .eq('id', beneficiaryId)
     .single();
 
-  await handleSendInputAmount(session, phoneNumber, beneficiaryId, benef?.account_holder_name || '');
+  const benefName = benef?.alias || benef?.account_holder || '';
+  await handleSendInputAmount(session, phoneNumber, beneficiaryId, benefName);
 }
 
 async function handleSendInputAmountStep(
@@ -431,15 +454,21 @@ async function handleSendConfirmStep(
 async function handleSendShowAccountStep(
   session: ChatSession,
   message: IncomingMessage,
-  phoneNumber: string
+  phoneNumber: string,
+  userName?: string
 ): Promise<void> {
   const selectionId = extractSelectionId(message);
 
-  if (selectionId === 'transfer_done') {
+  if (selectionId === 'payment_done') {
+    // Usuario indica que ya hizo el pago, pedir comprobante
     await handleSendUploadProof(session, phoneNumber);
-  } else if (selectionId === 'transfer_cancel') {
-    await sendMainMenu(phoneNumber);
-    await transitionTo(session.id, 'MAIN_MENU');
+  } else if (selectionId === 'payment_back') {
+    // Volver a confirmación
+    await handleSendConfirm(session, phoneNumber, session.metadata.amount_to_send || 0);
+  } else {
+    // Menú principal o texto libre
+    await sendMainMenu(phoneNumber, userName);
+    await resetSession(session.id);
   }
 }
 
@@ -472,7 +501,7 @@ async function handleSendUploadProofStep(
     .single();
 
   let proofUrl = `whatsapp://media/${message.image.id}`;
-  let ocrData: { amount?: number; reference?: string; date?: string } | undefined;
+  let ocrData: { amount?: number; reference?: string; date?: string; bank?: string } | undefined;
 
   if (waConfig?.config) {
     const config = waConfig.config as { access_token_encrypted?: string };
@@ -492,6 +521,7 @@ async function handleSendUploadProofStep(
             amount: ocrResult.extractedData.amount,
             reference: ocrResult.extractedData.reference,
             date: ocrResult.extractedData.date,
+            bank: ocrResult.extractedData.bank,
           };
           console.log('[OCR] Extracted data:', ocrData);
         }
@@ -576,3 +606,81 @@ function extractActionId(message: IncomingMessage): string | null {
 
   return null;
 }
+
+// ============================================================================
+// HANDLERS PASO: BENEFICIARIOS
+// ============================================================================
+
+async function handleBeneficiariesListStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    // Mostrar lista de nuevo
+    await handleBeneficiariesList(session, phoneNumber);
+    return;
+  }
+
+  // Si seleccionó un beneficiario, mostrar detalle
+  if (selectionId.startsWith('beneficiary_')) {
+    const beneficiaryId = selectionId.replace('beneficiary_', '');
+    await handleBeneficiaryDetail(session, phoneNumber, beneficiaryId);
+  }
+}
+
+async function handleBeneficiariesEmptyStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await sendMainMenu(phoneNumber, userName);
+    await transitionTo(session.id, 'MAIN_MENU');
+    return;
+  }
+
+  // Si quiere hacer un envío
+  if (selectionId === 'menu_send') {
+    await handleSendSelectCurrency(session, phoneNumber);
+  }
+}
+
+async function handleBeneficiariesDetailStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await sendMainMenu(phoneNumber, userName);
+    await transitionTo(session.id, 'MAIN_MENU');
+    return;
+  }
+
+  // Volver a lista de beneficiarios
+  if (selectionId === 'beneficiaries_back') {
+    await handleBeneficiariesList(session, phoneNumber);
+    return;
+  }
+
+  // Enviar a este beneficiario
+  if (selectionId.startsWith('send_to_')) {
+    const beneficiaryId = selectionId.replace('send_to_', '');
+    // Guardar beneficiario en metadata y luego pedir moneda
+    await transitionTo(session.id, 'IDLE', {
+      selected_beneficiary_id: beneficiaryId,
+      selected_beneficiary_name: session.metadata.selected_beneficiary_name,
+    });
+    // Iniciar flujo de envío con beneficiario preseleccionado
+    await handleSendSelectCurrency(session, phoneNumber);
+  }
+}
+

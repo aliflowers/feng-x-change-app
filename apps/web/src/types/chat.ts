@@ -31,6 +31,12 @@ export type ConversationStep =
  | 'SEND_CONFIRM'              // Confirmación de operación
  | 'SEND_SHOW_ACCOUNT'         // Cuenta de empresa mostrada
  | 'SEND_UPLOAD_PROOF'         // Esperando comprobante
+
+ // Flujo: Mis beneficiarios
+ | 'BENEFICIARIES_LIST'        // Lista de beneficiarios
+ | 'BENEFICIARIES_EMPTY'       // Sin beneficiarios
+ | 'BENEFICIARIES_DETAIL'      // Detalle de un beneficiario
+
  | 'COMPLETED';                // Operación creada
 
 // ============================================================================

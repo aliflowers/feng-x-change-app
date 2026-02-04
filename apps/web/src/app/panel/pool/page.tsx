@@ -20,6 +20,7 @@ import {
   Copy,
   Check,
   ArrowRight,
+  ShieldCheck,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +35,7 @@ interface PoolOperation {
   created_at: string;
   taken_at: string | null;
   client_proof_url: string | null;
+  admin_notes: string | null;
   from_currency: { id: number; code: string; symbol: string };
   to_currency: { id: number; code: string; symbol: string };
   user: { id: string; first_name: string; last_name: string; email: string };
@@ -55,9 +57,9 @@ interface Currency {
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: LucideIcon; bgColor: string }> = {
-  POOL: { label: 'En Pool', color: 'text-blue-600', icon: Inbox, bgColor: 'bg-blue-100' },
-  TAKEN: { label: 'Tomada', color: 'text-amber-600', icon: Clock, bgColor: 'bg-amber-100' },
-  VERIFYING: { label: 'Verificando', color: 'text-purple-600', icon: Eye, bgColor: 'bg-purple-100' },
+  POOL: { label: 'Por verificar', color: 'text-amber-600', icon: Inbox, bgColor: 'bg-amber-100' },
+  VERIFIED: { label: 'Verificada', color: 'text-purple-600', icon: ShieldCheck, bgColor: 'bg-purple-100' },
+  TAKEN: { label: 'Tomada', color: 'text-blue-600', icon: Clock, bgColor: 'bg-blue-100' },
   COMPLETED: { label: 'Completada', color: 'text-emerald-600', icon: CheckCircle2, bgColor: 'bg-emerald-100' },
   REJECTED: { label: 'Rechazada', color: 'text-red-600', icon: XCircle, bgColor: 'bg-red-100' },
 };
@@ -71,7 +73,7 @@ export default function PoolPage() {
   const [userRole, setUserRole] = useState<string>('');
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('POOL');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [currencyFilter, setCurrencyFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -82,6 +84,7 @@ export default function PoolPage() {
   const [showBeneficiaryModal, setShowBeneficiaryModal] = useState(false);
   const [takenOperation, setTakenOperation] = useState<PoolOperation | null>(null);
   const [takingOperation, setTakingOperation] = useState(false);
+  const [verifyingOperation, setVerifyingOperation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,6 +140,7 @@ export default function PoolPage() {
           created_at,
           taken_at,
           client_proof_url,
+          admin_notes,
           from_currency:currencies!transactions_from_currency_id_fkey(id, code, symbol),
           to_currency:currencies!transactions_to_currency_id_fkey(id, code, symbol),
           user:profiles!transactions_user_id_fkey(id, first_name, last_name, email),
@@ -199,7 +203,7 @@ export default function PoolPage() {
           taken_at: new Date().toISOString(),
         })
         .eq('id', operation.id)
-        .eq('status', 'POOL'); // Only take if still in POOL
+        .eq('status', 'VERIFIED'); // Only take if VERIFIED
 
       if (error) throw error;
 
@@ -216,6 +220,35 @@ export default function PoolPage() {
       alert('Error al tomar la operación. Puede que ya haya sido tomada por otro usuario.');
     } finally {
       setTakingOperation(false);
+    }
+  };
+
+  const handleVerifyOperation = async (operation: PoolOperation) => {
+    if (verifyingOperation) return;
+    if (userRole !== 'SUPER_ADMIN') {
+      alert('Solo el Super Admin puede verificar operaciones.');
+      return;
+    }
+    setVerifyingOperation(true);
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'VERIFIED',
+        })
+        .eq('id', operation.id)
+        .eq('status', 'POOL');
+
+      if (error) throw error;
+
+      // Refresh the list
+      loadOperations();
+    } catch (error) {
+      console.error('Error verifying operation:', error);
+      alert('Error al verificar la operación.');
+    } finally {
+      setVerifyingOperation(false);
     }
   };
 
@@ -256,6 +289,19 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ${minutes % 60}m`;
     return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  };
+
+  // Helper para parsear datos del OCR
+  const parseOcrData = (adminNotes: string | null): { amount?: number; reference?: string; date?: string; bank?: string } | null => {
+    if (!adminNotes) return null;
+    try {
+      return JSON.parse(adminNotes);
+    } catch {
+      // Formato legacy: "OCR Ref: XXX"
+      const refMatch = adminNotes.match(/Ref[:\s]+([A-Za-z0-9]+)/i);
+      if (refMatch) return { reference: refMatch[1] };
+      return null;
+    }
   };
 
   if (loading) {
@@ -318,9 +364,9 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
             className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-800"
           >
             <option value="">Todos los estados</option>
-            <option value="POOL">En Pool</option>
+            <option value="POOL">Por verificar</option>
+            <option value="VERIFIED">Verificadas</option>
             <option value="TAKEN">Tomadas</option>
-            <option value="VERIFYING">Verificando</option>
             <option value="COMPLETED">Completadas</option>
             <option value="REJECTED">Rechazadas</option>
           </select>
@@ -493,8 +539,20 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             </button>
                           )}
 
-                          {/* Take Operation Button */}
-                          {op.status === 'POOL' && (
+                          {/* Verify Operation Button - Only for SUPER_ADMIN on POOL status */}
+                          {op.status === 'POOL' && userRole === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => handleVerifyOperation(op)}
+                              disabled={verifyingOperation}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <ShieldCheck size={16} />
+                              Verificar
+                            </button>
+                          )}
+
+                          {/* Take Operation Button - Only for VERIFIED status */}
+                          {op.status === 'VERIFIED' && (
                             <button
                               onClick={() => {
                                 setSelectedOperation(op);
@@ -534,6 +592,53 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
               </button>
             </div>
             <div className="p-4 overflow-y-auto max-h-[70vh]">
+              {/* Operation Summary + OCR Data Combined */}
+              {(() => {
+                const ocrData = parseOcrData(selectedOperation.admin_notes);
+                return (
+                  <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-slate-500">Operación:</span>
+                        <span className="font-bold ml-2">{selectedOperation.transaction_number}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Cliente:</span>
+                        <span className="font-medium ml-2">{selectedOperation.user?.first_name} {selectedOperation.user?.last_name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Envía:</span>
+                        <span className="font-bold ml-2">{selectedOperation.from_currency?.symbol}{selectedOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.from_currency?.code}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Recibe:</span>
+                        <span className="font-bold text-emerald-600 ml-2">{selectedOperation.to_currency?.symbol}{selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.to_currency?.code}</span>
+                      </div>
+                      {/* OCR Data in same grid */}
+                      {ocrData?.reference && (
+                        <div>
+                          <span className="text-slate-500">Referencia:</span>
+                          <span className="font-mono font-bold ml-2">{ocrData.reference}</span>
+                        </div>
+                      )}
+                      {ocrData?.date && (
+                        <div>
+                          <span className="text-slate-500">Fecha:</span>
+                          <span className="font-medium ml-2">{ocrData.date}</span>
+                        </div>
+                      )}
+                      {ocrData?.bank && (
+                        <div>
+                          <span className="text-slate-500">Banco:</span>
+                          <span className="font-medium ml-2">{ocrData.bank}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Proof Image */}
               {selectedOperation.client_proof_url?.split(',').map((url, index) => (
                 <div key={index} className="mb-4">
                   <img

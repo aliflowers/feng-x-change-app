@@ -18,6 +18,7 @@ export {
 // Message Building
 export {
  sendTextMessage,
+ sendImageMessage,
  sendListMessage,
  sendButtonMessage,
  sendWelcomeUnregistered,

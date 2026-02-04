@@ -60,7 +60,14 @@ interface WhatsAppButtonMessage {
  };
 }
 
-type WhatsAppMessage = WhatsAppTextMessage | WhatsAppListMessage | WhatsAppButtonMessage;
+interface WhatsAppImageMessage {
+ messaging_product: 'whatsapp';
+ to: string;
+ type: 'image';
+ image: { link: string; caption?: string };
+}
+
+type WhatsAppMessage = WhatsAppTextMessage | WhatsAppListMessage | WhatsAppButtonMessage | WhatsAppImageMessage;
 
 // ============================================================================
 // OBTENCIÓN DE CREDENCIALES DE WHATSAPP
@@ -179,6 +186,26 @@ export async function sendTextMessage(to: string, text: string): Promise<{ succe
   to,
   type: 'text',
   text: { body: text },
+ };
+ return sendMessage(payload);
+}
+
+/**
+ * Construye y envía un mensaje con imagen
+ */
+export async function sendImageMessage(
+ to: string,
+ imageUrl: string,
+ caption?: string
+): Promise<{ success: boolean; messageId?: string }> {
+ const payload: WhatsAppMessage = {
+  messaging_product: 'whatsapp',
+  to,
+  type: 'image',
+  image: {
+   link: imageUrl,
+   ...(caption && { caption }),
+  },
  };
  return sendMessage(payload);
 }

@@ -3,12 +3,13 @@
  * 
  * Flujo completo:
  * 1. Seleccionar moneda a enviar
- * 2. Seleccionar método de pago
- * 3. Seleccionar beneficiario
+ * 2. Seleccionar método de pago (cómo va a pagar)
+ * 3. Seleccionar beneficiario (a quién envía) - SOLO si no viene preseleccionado
  * 4. Ingresar monto
  * 5. Confirmar operación
- * 6. Mostrar cuenta de empresa
- * 7. Recibir comprobante
+ * 6. Mostrar cuenta recaudadora de la empresa
+ * 7. Recibir comprobante de pago
+ * 8. Crear operación en el pool
  */
 
 import { createServerClient } from '@/lib/supabase/server';
@@ -16,18 +17,31 @@ import type { ChatSession } from '@/types/chat';
 import { NAVIGATION_ACTIONS } from '@/types/chat';
 import { transitionTo, resetSession } from '../session-manager';
 import {
-  sendCurrencySelector,
   sendListMessage,
   sendTextMessage,
+  sendButtonMessage,
+  sendMainMenu,
+  sendCurrencySelector,
   sendConfirmation,
-  sendCompanyAccount,
-  sendProofRequest,
-  sendOperationCreated,
-  sendMainMenu
+  sendOperationCreated
 } from '../message-builder';
 
 // ============================================================================
-// PASO 1: SELECCIONAR MONEDA A ENVIAR
+// MAPEO DE MONEDAS A BANDERAS
+// ============================================================================
+
+const currencyFlags: Record<string, string> = {
+  USD: '🇺🇸',
+  EUR: '🇪🇺',
+  VES: '🇻🇪',
+  COP: '🇨🇴',
+  CLP: '🇨🇱',
+  PEN: '🇵🇪',
+  PAB: '🇵🇦',
+};
+
+// ============================================================================
+// PASO 1: SELECCIONAR MONEDA
 // ============================================================================
 
 export async function handleSendSelectCurrency(
@@ -112,7 +126,7 @@ export async function handleSendSelectMethod(
 }
 
 // ============================================================================
-// PASO 3: SELECCIONAR BENEFICIARIO
+// PASO 3: SELECCIONAR BENEFICIARIO (si no viene preseleccionado)
 // ============================================================================
 
 export async function handleSendSelectBeneficiary(
@@ -122,8 +136,6 @@ export async function handleSendSelectBeneficiary(
   methodName: string
 ): Promise<void> {
   const supabase = createServerClient();
-
-  // Obtener beneficiarios del usuario
   const userId = session.user_id;
 
   if (!userId) {
@@ -131,13 +143,29 @@ export async function handleSendSelectBeneficiary(
     return;
   }
 
+  // Verificar si ya tiene beneficiario preseleccionado
+  if (session.metadata.selected_beneficiary_id) {
+    // Guardar método de pago en metadata antes de saltar
+    await transitionTo(session.id, session.current_step, {
+      selected_payment_method_id: methodId,
+      selected_payment_method_name: methodName,
+    });
+    // Actualizar la sesión local con los nuevos datos
+    session.metadata.selected_payment_method_id = methodId;
+    session.metadata.selected_payment_method_name = methodName;
+    // Saltar al paso de monto
+    await handleSendInputAmount(session, phoneNumber);
+    return;
+  }
+
+  // Obtener beneficiarios del usuario
   const { data: beneficiaries } = await supabase
     .from('user_bank_accounts')
     .select(`
       id,
-      account_holder_name,
-      bank_name,
-      currency:currencies(code)
+      account_holder,
+      alias,
+      bank_name
     `)
     .eq('user_id', userId)
     .eq('is_active', true);
@@ -154,11 +182,11 @@ export async function handleSendSelectBeneficiary(
     return;
   }
 
-  // Construir opciones con NOMBRE COMPLETO (no alias)
+  // Construir opciones
   const options = beneficiaries.map((b: any) => ({
     id: `benef_${b.id}`,
-    title: b.account_holder_name.slice(0, 24), // Límite WhatsApp
-    description: `${b.bank_name} - ${b.currency?.code || ''}`,
+    title: (b.alias || b.account_holder || 'Sin nombre').slice(0, 24),
+    description: b.bank_name || '',
   }));
 
   options.push({
@@ -190,8 +218,8 @@ export async function handleSendSelectBeneficiary(
 export async function handleSendInputAmount(
   session: ChatSession,
   phoneNumber: string,
-  beneficiaryId: string,
-  beneficiaryName: string
+  beneficiaryId?: string,
+  beneficiaryName?: string
 ): Promise<void> {
   const currencyFrom = session.metadata.selected_currency_from || 'USD';
 
@@ -202,10 +230,15 @@ export async function handleSendInputAmount(
     `Ejemplo: 100 o 100.50`
   );
 
-  await transitionTo(session.id, 'SEND_INPUT_AMOUNT', {
-    selected_beneficiary_id: beneficiaryId,
-    selected_beneficiary_name: beneficiaryName,
-  });
+  const updateData: any = {};
+  if (beneficiaryId) {
+    updateData.selected_beneficiary_id = beneficiaryId;
+  }
+  if (beneficiaryName) {
+    updateData.selected_beneficiary_name = beneficiaryName;
+  }
+
+  await transitionTo(session.id, 'SEND_INPUT_AMOUNT', updateData);
 }
 
 // ============================================================================
@@ -225,9 +258,13 @@ export async function handleSendConfirm(
     .from('user_bank_accounts')
     .select(`
       id,
-      account_holder_name,
+      account_holder,
+      alias,
       bank_name,
-      currency:currencies(code)
+      banks_platforms:bank_platform_id(
+        currency_id,
+        currencies:currency_id(code)
+      )
     `)
     .eq('id', metadata.selected_beneficiary_id)
     .single();
@@ -238,7 +275,7 @@ export async function handleSendConfirm(
   }
 
   const currencyFrom = metadata.selected_currency_from || 'USD';
-  const currencyTo = (beneficiary.currency as any)?.code || 'VES';
+  const currencyTo = (beneficiary as any).banks_platforms?.currencies?.code || 'VES';
 
   // Obtener tasa de cambio
   const { data: currencies } = await supabase
@@ -260,19 +297,21 @@ export async function handleSendConfirm(
   if (!rate) {
     await sendTextMessage(
       phoneNumber,
-      `No hay tasa disponible para ${currencyFrom} → ${currencyTo}.`
+      `No hay tasa disponible para ${currencyFrom} a ${currencyTo}.`
     );
     return;
   }
 
   const amountReceived = amount * rate.rate;
+  const benefName = (beneficiary as any).alias || (beneficiary as any).account_holder || 'Beneficiario';
+  const bankName = (beneficiary as any).bank_name || '';
 
   // Enviar confirmación
   await sendConfirmation(phoneNumber, {
     amountSent: amount,
     currencyFrom,
-    beneficiaryName: beneficiary.account_holder_name,
-    bankName: beneficiary.bank_name,
+    beneficiaryName: benefName,
+    bankName,
     rate: rate.rate,
     amountReceived,
     currencyTo,
@@ -287,7 +326,7 @@ export async function handleSendConfirm(
 }
 
 // ============================================================================
-// PASO 6: MOSTRAR CUENTA DE EMPRESA
+// PASO 6: MOSTRAR CUENTA RECAUDADORA DE LA EMPRESA
 // ============================================================================
 
 export async function handleSendShowAccount(
@@ -297,16 +336,17 @@ export async function handleSendShowAccount(
   const supabase = createServerClient();
   const metadata = session.metadata;
 
-  // Obtener cuenta de la empresa para el método de pago seleccionado
+  // Obtener la cuenta recaudadora (banks_platforms) según el método seleccionado
   const { data: account } = await supabase
-    .from('company_accounts')
+    .from('banks_platforms')
     .select(`
       id,
+      name,
       account_number,
       account_holder,
-      bank:banks_platforms(name)
+      type
     `)
-    .eq('bank_platform_id', metadata.selected_payment_method_id)
+    .eq('id', metadata.selected_payment_method_id)
     .eq('is_active', true)
     .single();
 
@@ -318,48 +358,98 @@ export async function handleSendShowAccount(
     return;
   }
 
-  await sendCompanyAccount(phoneNumber, {
-    amount: metadata.amount_to_send || 0,
-    currency: metadata.selected_currency_from || 'USD',
-    methodName: metadata.selected_payment_method_name || '',
-    accountDetails: account.account_number,
-    holderName: account.account_holder,
+  const isZelle = account.name.toLowerCase().includes('zelle');
+  const currencyFrom = metadata.selected_currency_from || 'USD';
+  const flag = currencyFlags[currencyFrom] || '';
+
+  // Construir mensaje con datos de la cuenta
+  let accountMessage = `🏦 *Datos para tu pago*\n\n`;
+  accountMessage += `💰 Monto a enviar: *${flag} ${metadata.amount_to_send?.toLocaleString()} ${currencyFrom}*\n\n`;
+  accountMessage += `📋 *${account.name}*\n`;
+  accountMessage += `• Titular: ${account.account_holder}\n`;
+  accountMessage += `• Cuenta/Email: ${account.account_number}\n`;
+
+  // Advertencia especial para Zelle
+  if (isZelle) {
+    accountMessage += `\n⚠️ *IMPORTANTE para Zelle:*\n`;
+    accountMessage += `❌ NO coloques NADA en el área de CONCEPTO/MEMO\n`;
+    accountMessage += `❌ Déjalo completamente vacío\n`;
+    accountMessage += `⚠️ Si escribes algo, tu pago será REVERSADO`;
+  }
+
+  await sendButtonMessage(phoneNumber, {
+    header: '💳 Realiza tu Pago',
+    body: accountMessage,
+    buttons: [
+      { id: 'payment_done', title: '✅ Ya hice el pago' },
+      { id: 'payment_back', title: '⬅️ Menú anterior' },
+      { id: NAVIGATION_ACTIONS.MAIN_MENU, title: '🏠 Menú Principal' },
+    ],
   });
 
   await transitionTo(session.id, 'SEND_SHOW_ACCOUNT', {
-    company_account_id: account.id,
+    company_account_id: account.id.toString(),
   });
 }
 
 // ============================================================================
-// PASO 7: PROCESAR COMPROBANTE
+// PASO 7: SOLICITAR COMPROBANTE
 // ============================================================================
 
 export async function handleSendUploadProof(
   session: ChatSession,
   phoneNumber: string
 ): Promise<void> {
-  await sendProofRequest(phoneNumber);
+  await sendTextMessage(
+    phoneNumber,
+    `📸 *Envía tu comprobante de pago*\n\n` +
+    `Por favor, envía una imagen clara de la captura de pantalla de tu pago realizado.\n\n` +
+    `Asegúrate de que se vea:\n` +
+    `• El monto transferido\n` +
+    `• La fecha y hora\n` +
+    `• El número de referencia`
+  );
+
   await transitionTo(session.id, 'SEND_UPLOAD_PROOF');
 }
 
-/**
- * Procesa la imagen del comprobante y crea la operación
- */
+// ============================================================================
+// PASO 8: PROCESAR COMPROBANTE Y CREAR OPERACIÓN
+// ============================================================================
+
 export async function handleProofReceived(
   session: ChatSession,
   phoneNumber: string,
   proofUrl: string,
-  _ocrData?: { amount?: number; reference?: string; date?: string }
+  ocrData?: { amount?: number; reference?: string; date?: string; bank?: string }
 ): Promise<void> {
   const supabase = createServerClient();
   const metadata = session.metadata;
 
   try {
-    // Generar número de transacción único
-    const transactionNumber = `FX-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    // Generar número de transacción único en formato OP-YYYY-NNNNN
+    const currentYear = new Date().getFullYear();
 
-    // Obtener IDs necesarios
+    // Obtener el último número de transacción del año actual
+    const { data: lastTransaction } = await supabase
+      .from('transactions')
+      .select('transaction_number')
+      .like('transaction_number', `OP-${currentYear}-%`)
+      .order('transaction_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    let nextNumber = 1;
+    if (lastTransaction?.transaction_number) {
+      const lastNum = parseInt(lastTransaction.transaction_number.split('-')[2], 10);
+      if (!isNaN(lastNum)) {
+        nextNumber = lastNum + 1;
+      }
+    }
+
+    const transactionNumber = `OP-${currentYear}-${nextNumber.toString().padStart(5, '0')}`;
+
+    // Obtener IDs de monedas
     const { data: currencies } = await supabase
       .from('currencies')
       .select('id, code')
@@ -367,6 +457,22 @@ export async function handleProofReceived(
 
     const fromCurrencyId = currencies?.find(c => c.code === metadata.selected_currency_from)?.id;
     const toCurrencyId = currencies?.find(c => c.code === metadata.selected_currency_to)?.id;
+
+    if (!fromCurrencyId || !toCurrencyId) {
+      await sendTextMessage(phoneNumber, '❌ Error: No se pudieron identificar las monedas.');
+      return;
+    }
+
+    // Preparar los datos del OCR
+    let ocrNotes = null;
+    if (ocrData && (ocrData.amount || ocrData.reference || ocrData.date || ocrData.bank)) {
+      ocrNotes = JSON.stringify({
+        amount: ocrData.amount,
+        reference: ocrData.reference,
+        date: ocrData.date,
+        bank: ocrData.bank,
+      });
+    }
 
     // Crear la transacción en el pool
     const { error: insertError } = await supabase
@@ -378,16 +484,16 @@ export async function handleProofReceived(
         to_currency_id: toCurrencyId,
         amount_sent: metadata.amount_to_send,
         amount_received: metadata.calculated_amount_received,
-        exchange_rate: metadata.calculated_rate,
-        beneficiary_account_id: metadata.selected_beneficiary_id,
-        payment_method_id: metadata.selected_payment_method_id,
-        client_payment_proof_url: proofUrl,
-        status: 'pending',
-        source: 'whatsapp',
+        exchange_rate_applied: metadata.calculated_rate,
+        user_bank_account_id: metadata.selected_beneficiary_id,
+        bank_platform_id: parseInt(metadata.selected_payment_method_id || '0'),
+        client_proof_url: proofUrl,
+        status: 'POOL', // Va al pool de operaciones
+        admin_notes: ocrNotes,
       });
 
     if (insertError) {
-      console.error('Error creating transaction:', insertError);
+      console.error('[SendFlow] Error creating transaction:', insertError);
       await sendTextMessage(
         phoneNumber,
         '❌ Hubo un error al registrar tu operación. Por favor intenta nuevamente.'
@@ -395,14 +501,39 @@ export async function handleProofReceived(
       return;
     }
 
+    // Obtener datos del beneficiario para el mensaje de confirmación
+    const { data: beneficiary } = await supabase
+      .from('user_bank_accounts')
+      .select('account_holder, alias, bank_name')
+      .eq('id', metadata.selected_beneficiary_id)
+      .single();
+
+    const benefName = beneficiary?.alias || beneficiary?.account_holder || 'tu beneficiario';
+
     // Confirmar al usuario
     await sendOperationCreated(phoneNumber, transactionNumber);
+
+    // Mensaje adicional con resumen
+    const currencyFrom = metadata.selected_currency_from || 'USD';
+    const currencyTo = metadata.selected_currency_to || 'VES';
+    const fromFlag = currencyFlags[currencyFrom] || '';
+    const toFlag = currencyFlags[currencyTo] || '';
+
+    await sendTextMessage(
+      phoneNumber,
+      `📋 *Resumen de tu operación:*\n\n` +
+      `• Enviaste: ${fromFlag} ${metadata.amount_to_send?.toLocaleString()} ${currencyFrom}\n` +
+      `• Recibirá: ${toFlag} ${metadata.calculated_amount_received?.toLocaleString()} ${currencyTo}\n` +
+      `• Beneficiario: ${benefName}\n` +
+      `• Banco: ${beneficiary?.bank_name || 'No especificado'}\n\n` +
+      `Tu operación está en cola y será procesada a la brevedad. 🚀`
+    );
 
     // Resetear sesión
     await resetSession(session.id);
 
   } catch (error) {
-    console.error('Error processing proof:', error);
+    console.error('[SendFlow] Error processing proof:', error);
     await sendTextMessage(
       phoneNumber,
       '❌ Error al procesar tu comprobante. Por favor intenta nuevamente.'
