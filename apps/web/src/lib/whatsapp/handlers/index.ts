@@ -1,0 +1,578 @@
+/**
+ * Dispatcher Principal - Orquesta el flujo según el estado actual
+ * 
+ * Este es el cerebro del bot: recibe el mensaje y decide qué handler ejecutar
+ * basándose en el current_step de la sesión.
+ */
+
+import { createServerClient } from '@/lib/supabase/server';
+import type { ChatSession, ConversationStep } from '@/types/chat';
+import { NAVIGATION_ACTIONS } from '@/types/chat';
+import {
+  getOrCreateSession,
+  transitionTo,
+  resetSession
+} from '../session-manager';
+import { sendTextMessage, sendMainMenu } from '../message-builder';
+import {
+  checkSessionTimeout,
+  sendSessionExpiredMessage,
+  detectTextCommand,
+  sendHelpMessage
+} from '../navigation-utils';
+
+// Handlers
+import {
+  handleIdleState,
+  handleMainMenuSelection,
+  handleNavigationAction
+} from './main-menu';
+import {
+  handleRatesSelectCurrency,
+  handleRatesCurrencySelected,
+  handleRatesShowRate
+} from './rates-flow';
+import {
+  handleSendSelectCurrency,
+  handleSendSelectMethod,
+  handleSendSelectBeneficiary,
+  handleSendInputAmount,
+  handleSendConfirm,
+  handleSendShowAccount,
+  handleSendUploadProof,
+  handleProofReceived
+} from './send-flow';
+
+// ============================================================================
+// TIPOS DE MENSAJE ENTRANTES
+// ============================================================================
+
+export interface IncomingMessage {
+  id: string;
+  from: string;
+  timestamp: string;
+  type: 'text' | 'interactive' | 'image' | 'document' | 'audio' | 'video';
+  text?: { body: string };
+  interactive?: {
+    type: 'list_reply' | 'button_reply';
+    list_reply?: { id: string; title: string };
+    button_reply?: { id: string; title: string };
+  };
+  image?: { id: string; mime_type: string };
+}
+
+// ============================================================================
+// DISPATCHER PRINCIPAL
+// ============================================================================
+
+/**
+ * Procesa un mensaje entrante y lo despacha al handler correcto
+ */
+export async function dispatchMessage(
+  message: IncomingMessage,
+  _phoneNumberId: string
+): Promise<void> {
+  const phoneNumber = message.from;
+
+  try {
+    // 1. Obtener o crear sesión (también verifica si está registrado)
+    const { session, isRegistered, userName } = await getOrCreateSession(phoneNumber);
+
+    console.log('[Dispatcher] Session state:', {
+      phoneNumber,
+      isRegistered,
+      currentStep: session.current_step,
+      userName,
+    });
+
+    // 2. Verificar timeout de sesión (24h sin actividad)
+    if (session.last_message_at) {
+      const expired = await checkSessionTimeout(session.id, session.last_message_at);
+      if (expired) {
+        await sendSessionExpiredMessage(phoneNumber, userName);
+        return;
+      }
+    }
+
+    // 3. Detectar comandos de texto especiales (menú, cancelar, ayuda)
+    if (message.type === 'text' && message.text?.body) {
+      const command = detectTextCommand(message.text.body);
+
+      if (command === 'menu') {
+        await resetSession(session.id);
+        await sendMainMenu(phoneNumber, userName);
+        return;
+      }
+
+      if (command === 'cancel') {
+        await resetSession(session.id);
+        await sendTextMessage(phoneNumber, '❌ Operación cancelada.');
+        await sendMainMenu(phoneNumber, userName);
+        return;
+      }
+
+      if (command === 'help') {
+        await sendHelpMessage(phoneNumber);
+        return;
+      }
+    }
+
+    // 4. Verificar acciones de navegación global (botones)
+    const actionId = extractActionId(message);
+    if (actionId) {
+      const handled = await handleNavigationAction(session, phoneNumber, actionId, userName);
+      if (handled) return;
+    }
+
+    // 5. Despachar según el estado actual
+    await routeByCurrentStep(session, message, phoneNumber, isRegistered, userName);
+
+  } catch (error) {
+    console.error('[Dispatcher] Error:', error);
+    await sendTextMessage(
+      phoneNumber,
+      '❌ Ocurrió un error. Por favor, intenta nuevamente.'
+    );
+  }
+}
+
+// ============================================================================
+// ROUTER POR ESTADO
+// ============================================================================
+
+async function routeByCurrentStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  isRegistered: boolean,
+  userName?: string
+): Promise<void> {
+  const step = session.current_step as ConversationStep;
+
+  switch (step) {
+    // =========================================================================
+    // ESTADOS BASE
+    // =========================================================================
+    case 'IDLE':
+      await handleIdleState(session, phoneNumber, isRegistered, userName);
+      break;
+
+    case 'MAIN_MENU':
+      await handleMainMenuStep(session, message, phoneNumber, userName);
+      break;
+
+    // =========================================================================
+    // FLUJO: CONSULTAR TASAS
+    // =========================================================================
+    case 'RATES_SELECT_CURRENCY':
+      await handleRatesSelectCurrencyStep(session, message, phoneNumber);
+      break;
+
+    case 'RATES_SELECT_PAIR':
+      await handleRatesSelectPairStep(session, message, phoneNumber);
+      break;
+
+    case 'RATES_SHOW':
+      await handleRatesShowStep(session, message, phoneNumber, userName);
+      break;
+
+    // =========================================================================
+    // FLUJO: HACER ENVÍO
+    // =========================================================================
+    case 'SEND_SELECT_CURRENCY':
+      await handleSendSelectCurrencyStep(session, message, phoneNumber);
+      break;
+
+    case 'SEND_SELECT_METHOD':
+      await handleSendSelectMethodStep(session, message, phoneNumber);
+      break;
+
+    case 'SEND_SELECT_BENEFICIARY':
+      await handleSendSelectBeneficiaryStep(session, message, phoneNumber);
+      break;
+
+    case 'SEND_INPUT_AMOUNT':
+      await handleSendInputAmountStep(session, message, phoneNumber);
+      break;
+
+    case 'SEND_CONFIRM':
+      await handleSendConfirmStep(session, message, phoneNumber, userName);
+      break;
+
+    case 'SEND_SHOW_ACCOUNT':
+      await handleSendShowAccountStep(session, message, phoneNumber);
+      break;
+
+    case 'SEND_UPLOAD_PROOF':
+      await handleSendUploadProofStep(session, message, phoneNumber);
+      break;
+
+    // =========================================================================
+    // DEFAULT
+    // =========================================================================
+    default:
+      console.warn('[Dispatcher] Unknown step:', step);
+      await handleIdleState(session, phoneNumber, isRegistered, userName);
+  }
+}
+
+// ============================================================================
+// HANDLERS POR PASO
+// ============================================================================
+
+async function handleMainMenuStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    // Si escribió texto libre, mostrar menú de nuevo
+    await sendMainMenu(phoneNumber, userName);
+    return;
+  }
+
+  const { nextStep, handled } = await handleMainMenuSelection(
+    session, phoneNumber, selectionId, userName
+  );
+
+  if (handled && nextStep !== 'MAIN_MENU') {
+    // Transicionar al siguiente paso
+    switch (nextStep) {
+      case 'RATES_SELECT_CURRENCY':
+        await handleRatesSelectCurrency(session, phoneNumber);
+        break;
+      case 'SEND_SELECT_CURRENCY':
+        await handleSendSelectCurrency(session, phoneNumber);
+        break;
+    }
+  }
+}
+
+async function handleRatesSelectCurrencyStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId || !selectionId.startsWith('currency_')) {
+    await handleRatesSelectCurrency(session, phoneNumber);
+    return;
+  }
+
+  const currencyCode = selectionId.replace('currency_', '');
+  await handleRatesCurrencySelected(session, phoneNumber, currencyCode);
+}
+
+async function handleRatesSelectPairStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId || !selectionId.startsWith('rate_')) {
+    // Volver a mostrar opciones
+    const currencyFrom = session.metadata.selected_currency_from || 'USD';
+    await handleRatesCurrencySelected(session, phoneNumber, currencyFrom);
+    return;
+  }
+
+  // Extraer par: rate_USD_VES -> USD, VES
+  const [, from, to] = selectionId.split('_');
+  await handleRatesShowRate(session, phoneNumber, from, to);
+}
+
+async function handleRatesShowStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  switch (selectionId) {
+    case 'start_send_with_rate':
+      // Iniciar envío con la tasa actual
+      await handleSendSelectCurrency(session, phoneNumber);
+      break;
+    case 'rate_another':
+      await handleRatesSelectCurrency(session, phoneNumber);
+      break;
+    default:
+      await sendMainMenu(phoneNumber, userName);
+  }
+}
+
+async function handleSendSelectCurrencyStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId || !selectionId.startsWith('currency_')) {
+    await handleSendSelectCurrency(session, phoneNumber);
+    return;
+  }
+
+  const currencyCode = selectionId.replace('currency_', '');
+  await handleSendSelectMethod(session, phoneNumber, currencyCode);
+}
+
+async function handleSendSelectMethodStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId || !selectionId.startsWith('method_')) {
+    // Volver a mostrar métodos
+    const currencyFrom = session.metadata.selected_currency_from || 'USD';
+    await handleSendSelectMethod(session, phoneNumber, currencyFrom);
+    return;
+  }
+
+  const methodId = selectionId.replace('method_', '');
+  // Obtener nombre del método de la BD
+  const supabase = createServerClient();
+  const { data: method } = await supabase
+    .from('banks_platforms')
+    .select('name')
+    .eq('id', methodId)
+    .single();
+
+  await handleSendSelectBeneficiary(session, phoneNumber, methodId, method?.name || '');
+}
+
+async function handleSendSelectBeneficiaryStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId || !selectionId.startsWith('benef_')) {
+    // Volver a mostrar beneficiarios
+    await handleSendSelectBeneficiary(
+      session,
+      phoneNumber,
+      session.metadata.selected_payment_method_id || '',
+      session.metadata.selected_payment_method_name || ''
+    );
+    return;
+  }
+
+  const beneficiaryId = selectionId.replace('benef_', '');
+
+  // Obtener nombre del beneficiario
+  const supabase = createServerClient();
+  const { data: benef } = await supabase
+    .from('user_bank_accounts')
+    .select('account_holder_name')
+    .eq('id', beneficiaryId)
+    .single();
+
+  await handleSendInputAmount(session, phoneNumber, beneficiaryId, benef?.account_holder_name || '');
+}
+
+async function handleSendInputAmountStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  // Esperamos texto con el monto
+  if (message.type !== 'text' || !message.text?.body) {
+    await sendTextMessage(
+      phoneNumber,
+      'Por favor, escribe el monto a enviar. Ejemplo: 100 o 100.50'
+    );
+    return;
+  }
+
+  const amountText = message.text.body.trim();
+  const amount = parseFloat(amountText.replace(',', '.'));
+
+  if (isNaN(amount) || amount <= 0) {
+    await sendTextMessage(
+      phoneNumber,
+      '❌ Monto inválido. Por favor, ingresa un número válido.\n\nEjemplo: 100 o 100.50'
+    );
+    return;
+  }
+
+  await handleSendConfirm(session, phoneNumber, amount);
+}
+
+async function handleSendConfirmStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (selectionId === 'confirm_yes') {
+    await handleSendShowAccount(session, phoneNumber);
+  } else if (selectionId === 'confirm_no') {
+    await sendTextMessage(phoneNumber, '❌ Operación cancelada.');
+    await sendMainMenu(phoneNumber, userName);
+    await transitionTo(session.id, 'MAIN_MENU');
+  } else {
+    // Volver a mostrar confirmación
+    await handleSendConfirm(session, phoneNumber, session.metadata.amount_to_send || 0);
+  }
+}
+
+async function handleSendShowAccountStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (selectionId === 'transfer_done') {
+    await handleSendUploadProof(session, phoneNumber);
+  } else if (selectionId === 'transfer_cancel') {
+    await sendMainMenu(phoneNumber);
+    await transitionTo(session.id, 'MAIN_MENU');
+  }
+}
+
+async function handleSendUploadProofStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  // Esperamos una imagen
+  if (message.type !== 'image' || !message.image) {
+    await sendTextMessage(
+      phoneNumber,
+      '📸 Por favor, envía una imagen de tu comprobante de pago.'
+    );
+    return;
+  }
+
+  // Notificar que estamos procesando
+  await sendTextMessage(
+    phoneNumber,
+    '⏳ Procesando tu comprobante, espera un momento...'
+  );
+
+  // Obtener token de WhatsApp para descargar media
+  const supabase = createServerClient();
+  const { data: waConfig } = await supabase
+    .from('notification_config')
+    .select('config')
+    .eq('provider', 'whatsapp')
+    .single();
+
+  let proofUrl = `whatsapp://media/${message.image.id}`;
+  let ocrData: { amount?: number; reference?: string; date?: string } | undefined;
+
+  if (waConfig?.config) {
+    const config = waConfig.config as { access_token_encrypted?: string };
+    if (config.access_token_encrypted) {
+      try {
+        const { decrypt, isEncrypted } = await import('@/lib/crypto');
+        const token = isEncrypted(config.access_token_encrypted)
+          ? await decrypt(config.access_token_encrypted)
+          : config.access_token_encrypted;
+
+        // Importar y usar OCR
+        const { processWhatsAppMedia } = await import('../ocr-service');
+        const ocrResult = await processWhatsAppMedia(message.image.id, token);
+
+        if (ocrResult.success && ocrResult.confidence > 0.3) {
+          ocrData = {
+            amount: ocrResult.extractedData.amount,
+            reference: ocrResult.extractedData.reference,
+            date: ocrResult.extractedData.date,
+          };
+          console.log('[OCR] Extracted data:', ocrData);
+        }
+
+        // Descargar imagen para guardarla en storage
+        const mediaInfoResponse = await fetch(
+          `https://graph.facebook.com/v21.0/${message.image.id}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+
+        if (mediaInfoResponse.ok) {
+          const mediaInfo = await mediaInfoResponse.json();
+          const downloadResponse = await fetch(mediaInfo.url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (downloadResponse.ok) {
+            const arrayBuffer = await downloadResponse.arrayBuffer();
+            const fileName = `proofs/${session.user_id}/${Date.now()}.jpg`;
+
+            // Subir a Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('proofs')
+              .upload(fileName, arrayBuffer, {
+                contentType: 'image/jpeg',
+                upsert: false
+              });
+
+            if (!uploadError && uploadData) {
+              const { data: publicUrl } = supabase.storage
+                .from('proofs')
+                .getPublicUrl(fileName);
+              proofUrl = publicUrl.publicUrl;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Handler] Error processing media:', error);
+      }
+    }
+  }
+
+  await handleProofReceived(session, phoneNumber, proofUrl, ocrData);
+}
+
+// ============================================================================
+// UTILIDADES
+// ============================================================================
+
+/**
+ * Extrae el ID de una selección interactiva o botón
+ */
+function extractSelectionId(message: IncomingMessage): string | null {
+  if (message.type !== 'interactive' || !message.interactive) {
+    return null;
+  }
+
+  if (message.interactive.type === 'list_reply' && message.interactive.list_reply) {
+    return message.interactive.list_reply.id;
+  }
+
+  if (message.interactive.type === 'button_reply' && message.interactive.button_reply) {
+    return message.interactive.button_reply.id;
+  }
+
+  return null;
+}
+
+/**
+ * Extrae el ID de acción de navegación si existe
+ */
+function extractActionId(message: IncomingMessage): string | null {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) return null;
+
+  // Verificar si es una acción de navegación
+  const navActions = Object.values(NAVIGATION_ACTIONS);
+  if (navActions.includes(selectionId as any)) {
+    return selectionId;
+  }
+
+  return null;
+}
