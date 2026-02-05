@@ -25,6 +25,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
   session: ChatSession;
   isRegistered: boolean;
   userName?: string;
+  userRole?: string;
 }> {
   const supabase = createServerClient();
 
@@ -44,7 +45,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
 
   const { data: byWhatsApp } = await supabase
     .from('profiles')
-    .select('id, first_name, last_name')
+    .select('id, first_name, last_name, role')
     .eq('whatsapp_number', cleanPhone)
     .single();
 
@@ -54,7 +55,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
     // Buscar por phone_number (con +)
     const { data: byPhone } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, role')
       .eq('phone_number', phoneWithPlus)
       .single();
 
@@ -65,6 +66,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
 
   const isRegistered = !!profile;
   const userName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : undefined;
+  const userRole = profile?.role;
 
   // 3. Si existe sesión, actualizarla y retornarla
   if (existingSession) {
@@ -91,6 +93,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
       session: existingSession as ChatSession,
       isRegistered,
       userName,
+      userRole,
     };
   }
 
@@ -114,6 +117,7 @@ export async function getOrCreateSession(phoneNumber: string): Promise<{
     session: newSession as ChatSession,
     isRegistered,
     userName,
+    userRole,
   };
 }
 

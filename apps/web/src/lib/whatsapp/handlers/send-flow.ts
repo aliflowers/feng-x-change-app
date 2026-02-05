@@ -475,7 +475,7 @@ export async function handleProofReceived(
     }
 
     // Crear la transacción en el pool
-    const { error: insertError } = await supabase
+    const { data: newTransaction, error: insertError } = await supabase
       .from('transactions')
       .insert({
         transaction_number: transactionNumber,
@@ -490,15 +490,31 @@ export async function handleProofReceived(
         client_proof_url: proofUrl,
         status: 'POOL', // Va al pool de operaciones
         admin_notes: ocrNotes,
-      });
+      })
+      .select('id')
+      .single();
 
-    if (insertError) {
+    if (insertError || !newTransaction) {
       console.error('[SendFlow] Error creating transaction:', insertError);
       await sendTextMessage(
         phoneNumber,
         '❌ Hubo un error al registrar tu operación. Por favor intenta nuevamente.'
       );
       return;
+    }
+
+    // Notificar a usuarios internos que hay nueva operación en pool
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      await fetch(`${appUrl}/api/whatsapp/notify-new-operation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: newTransaction.id }),
+      });
+      console.log('[SendFlow] Internal users notified of new operation');
+    } catch (notifyError) {
+      console.error('[SendFlow] Error notifying internal users:', notifyError);
+      // No es crítico, la operación ya fue creada
     }
 
     // Obtener datos del beneficiario para el mensaje de confirmación

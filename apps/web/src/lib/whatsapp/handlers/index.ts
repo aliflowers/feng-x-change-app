@@ -80,16 +80,26 @@ export async function dispatchMessage(
 
   try {
     // 1. Obtener o crear sesión (también verifica si está registrado)
-    const { session, isRegistered, userName } = await getOrCreateSession(phoneNumber);
+    const { session, isRegistered, userName, userRole } = await getOrCreateSession(phoneNumber);
 
     console.log('[Dispatcher] Session state:', {
       phoneNumber,
       isRegistered,
       currentStep: session.current_step,
       userName,
+      userRole,
     });
 
-    // 2. Verificar timeout de sesión (24h sin actividad)
+    // 2. Verificar si es usuario interno (solo clientes usan el bot de WhatsApp)
+    // Los usuarios internos (ADMIN, CAJERO, SUPERVISOR, SUPER_ADMIN) no deben usar el flujo del bot
+    const INTERNAL_ROLES = ['ADMIN', 'CAJERO', 'SUPERVISOR', 'SUPER_ADMIN'];
+    if (userRole && INTERNAL_ROLES.includes(userRole)) {
+      console.log('[Dispatcher] Ignoring message from internal user:', { phoneNumber, userRole });
+      // No enviar mensaje para no confundir, simplemente ignorar
+      return;
+    }
+
+    // 3. Verificar timeout de sesión (24h sin actividad)
     if (session.last_message_at) {
       const expired = await checkSessionTimeout(session.id, session.last_message_at);
       if (expired) {

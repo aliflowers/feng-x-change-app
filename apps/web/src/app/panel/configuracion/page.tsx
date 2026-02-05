@@ -28,6 +28,7 @@ interface UserProfile {
   first_name: string;
   last_name: string;
   email: string;
+  whatsapp_number: string | null;
   role: 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR' | 'CLIENT';
   two_factor_method?: 'none' | 'email' | 'totp';
   two_factor_verified?: boolean;
@@ -73,7 +74,7 @@ export default function ConfiguracionPage() {
 
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email, role, two_factor_method, two_factor_verified')
+        .select('id, first_name, last_name, email, whatsapp_number, role, two_factor_method, two_factor_verified')
         .eq('id', user.id)
         .single();
 
@@ -212,6 +213,7 @@ export default function ConfiguracionPage() {
               <MiCuentaTab
                 userRole={profile?.role as 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR'}
                 userEmail={profile?.email || ''}
+                userPhone={profile?.whatsapp_number || ''}
                 user2FAEnabled={profile?.two_factor_method !== 'none' && profile?.two_factor_verified === true}
               />
             </div>
