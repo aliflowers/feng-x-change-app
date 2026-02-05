@@ -1,17 +1,17 @@
 'use server';
 
 /**
- * API Route: /api/whatsapp/notify-new-operation
+ * API Route: /api/whatsapp/notify-verified-operation
  * 
- * Envía notificación vía WhatsApp a todos los usuarios internos activos
- * cuando una nueva operación ingresa al pool
+ * Envía notificación vía WhatsApp a usuarios operativos (ADMIN, CAJERO, SUPERVISOR)
+ * cuando una operación es verificada por el SUPER_ADMIN y está lista para ser tomada
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { sendTextMessage } from '@/lib/whatsapp';
 
-interface NotifyNewOperationRequest {
+interface NotifyVerifiedOperationRequest {
  transactionId: string;
 }
 
@@ -20,7 +20,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://fengxchange.com';
 
 export async function POST(request: NextRequest) {
  try {
-  const body: NotifyNewOperationRequest = await request.json();
+  const body: NotifyVerifiedOperationRequest = await request.json();
   const { transactionId } = body;
 
   if (!transactionId) {
@@ -53,34 +53,34 @@ export async function POST(request: NextRequest) {
    .single();
 
   if (txError || !transaction) {
-   console.error('[NotifyNewOperation] Transaction not found:', txError);
+   console.error('[NotifyVerifiedOperation] Transaction not found:', txError);
    return NextResponse.json(
     { error: 'Transaction not found' },
     { status: 404 }
    );
   }
 
-  // Obtener usuarios internos activos con whatsapp_number
-  const { data: internalUsers, error: usersError } = await supabase
+  // Obtener usuarios operativos activos (NO SUPER_ADMIN) con whatsapp_number
+  const { data: operativeUsers, error: usersError } = await supabase
    .from('profiles')
    .select('id, first_name, whatsapp_number, role')
-   .in('role', ['SUPER_ADMIN', 'ADMIN', 'CAJERO', 'SUPERVISOR'])
+   .in('role', ['ADMIN', 'CAJERO', 'SUPERVISOR'])
    .eq('is_active', true)
    .not('whatsapp_number', 'is', null);
 
   if (usersError) {
-   console.error('[NotifyNewOperation] Error fetching users:', usersError);
+   console.error('[NotifyVerifiedOperation] Error fetching users:', usersError);
    return NextResponse.json(
-    { error: 'Error fetching internal users' },
+    { error: 'Error fetching operative users' },
     { status: 500 }
    );
   }
 
-  if (!internalUsers || internalUsers.length === 0) {
-   console.log('[NotifyNewOperation] No internal users with WhatsApp');
+  if (!operativeUsers || operativeUsers.length === 0) {
+   console.log('[NotifyVerifiedOperation] No operative users with WhatsApp');
    return NextResponse.json({
     success: true,
-    message: 'No internal users to notify',
+    message: 'No operative users to notify',
     notified: 0,
    });
   }
@@ -97,7 +97,6 @@ export async function POST(request: NextRequest) {
 
   const clientName = user ? `${user.first_name} ${user.last_name}` : 'Cliente';
   const beneficiaryName = beneficiary?.account_holder || 'No especificado';
-  // Ahora solo usamos bank (tabla banks) - arquitectura unificada
   const bankName = beneficiary?.bank?.name || beneficiary?.bank_name || 'No especificado';
 
   const fromSymbol = fromCurrency?.symbol || '$';
@@ -105,44 +104,29 @@ export async function POST(request: NextRequest) {
   const toSymbol = toCurrency?.symbol || 'Bs';
   const toCode = toCurrency?.code || 'VES';
 
-  // Construir mensaje de notificación para usuarios operativos (ADMIN, CAJERO, SUPERVISOR)
-  const operativeMessage =
-   `🔔 *Nueva Operación en Pool*\n\n` +
+  // Construir mensaje de notificación
+  const message =
+   `✅ *Operación Verificada - Lista para Tomar*\n\n` +
    `📋 *Operación:* ${transaction.transaction_number}\n` +
    `👤 *Cliente:* ${clientName}\n\n` +
    `💵 *Envía:* ${fromSymbol}${transaction.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${fromCode}\n` +
-   `💰 *Recibe:* ${toSymbol}${transaction.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${toCode}\n\n` +
+   `💰 *Debe Recibir:* ${toSymbol}${transaction.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${toCode}\n\n` +
    `🏦 *Beneficiario:* ${beneficiaryName}\n` +
    `🏛️ *Banco:* ${bankName}\n\n` +
-   `👉 *Ver en Pool:* ${APP_URL}/panel/pool`;
+   `👉 *Tomar operación:* ${APP_URL}/panel/pool`;
 
-  // Construir mensaje específico para SUPER_ADMIN (verificación pendiente)
-  const superAdminMessage =
-   `⚠️ *Operación Pendiente de Verificar*\n\n` +
-   `Se ha registrado una nueva operación que requiere tu verificación:\n\n` +
-   `📋 *Operación:* ${transaction.transaction_number}\n` +
-   `👤 *Cliente:* ${clientName}\n\n` +
-   `💵 *Envía:* ${fromSymbol}${transaction.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${fromCode}\n` +
-   `💰 *Recibe:* ${toSymbol}${transaction.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${toCode}\n\n` +
-   `🏦 *Beneficiario:* ${beneficiaryName}\n` +
-   `🏛️ *Banco:* ${bankName}\n\n` +
-   `🔍 *Por favor verifica esta operación en el Pool:*\n${APP_URL}/panel/pool`;
-
-  // Enviar notificación a cada usuario interno
+  // Enviar notificación a cada usuario operativo
   const sendResults = await Promise.allSettled(
-   internalUsers.map(async (internalUser) => {
-    if (!internalUser.whatsapp_number) return { success: false, userId: internalUser.id };
-
-    // Usar mensaje específico según el rol
-    const message = internalUser.role === 'SUPER_ADMIN' ? superAdminMessage : operativeMessage;
+   operativeUsers.map(async (operativeUser) => {
+    if (!operativeUser.whatsapp_number) return { success: false, userId: operativeUser.id };
 
     try {
-     const result = await sendTextMessage(internalUser.whatsapp_number, message);
-     console.log(`[NotifyNewOperation] Sent to ${internalUser.first_name} (${internalUser.role}):`, result.success);
-     return { success: result.success, userId: internalUser.id };
+     const result = await sendTextMessage(operativeUser.whatsapp_number, message);
+     console.log(`[NotifyVerifiedOperation] Sent to ${operativeUser.first_name} (${operativeUser.role}):`, result.success);
+     return { success: result.success, userId: operativeUser.id };
     } catch (error) {
-     console.error(`[NotifyNewOperation] Error sending to ${internalUser.first_name}:`, error);
-     return { success: false, userId: internalUser.id };
+     console.error(`[NotifyVerifiedOperation] Error sending to ${operativeUser.first_name}:`, error);
+     return { success: false, userId: operativeUser.id };
     }
    })
   );
@@ -151,16 +135,16 @@ export async function POST(request: NextRequest) {
    (r) => r.status === 'fulfilled' && r.value.success
   ).length;
 
-  console.log(`[NotifyNewOperation] Notified ${successCount}/${internalUsers.length} users`);
+  console.log(`[NotifyVerifiedOperation] Notified ${successCount}/${operativeUsers.length} users`);
 
   return NextResponse.json({
    success: true,
    notified: successCount,
-   total: internalUsers.length,
+   total: operativeUsers.length,
   });
 
  } catch (error) {
-  console.error('[NotifyNewOperation] Exception:', error);
+  console.error('[NotifyVerifiedOperation] Exception:', error);
   return NextResponse.json(
    { error: 'Internal server error' },
    { status: 500 }

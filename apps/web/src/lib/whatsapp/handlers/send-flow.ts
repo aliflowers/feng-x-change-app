@@ -261,9 +261,9 @@ export async function handleSendConfirm(
       account_holder,
       alias,
       bank_name,
-      banks_platforms:bank_platform_id(
-        currency_id,
-        currencies:currency_id(code)
+      bank:banks(
+        name,
+        currency_code
       )
     `)
     .eq('id', metadata.selected_beneficiary_id)
@@ -275,7 +275,7 @@ export async function handleSendConfirm(
   }
 
   const currencyFrom = metadata.selected_currency_from || 'USD';
-  const currencyTo = (beneficiary as any).banks_platforms?.currencies?.code || 'VES';
+  const currencyTo = (beneficiary as any).bank?.currency_code || 'VES';
 
   // Obtener tasa de cambio
   const { data: currencies } = await supabase
@@ -520,11 +520,13 @@ export async function handleProofReceived(
     // Obtener datos del beneficiario para el mensaje de confirmación
     const { data: beneficiary } = await supabase
       .from('user_bank_accounts')
-      .select('account_holder, alias, bank_name')
+      .select('account_holder, alias, bank:banks(name)')
       .eq('id', metadata.selected_beneficiary_id)
       .single();
 
     const benefName = beneficiary?.alias || beneficiary?.account_holder || 'tu beneficiario';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bankName = (beneficiary?.bank as any)?.name || 'No especificado';
 
     // Confirmar al usuario
     await sendOperationCreated(phoneNumber, transactionNumber);
@@ -541,7 +543,7 @@ export async function handleProofReceived(
       `• Enviaste: ${fromFlag} ${metadata.amount_to_send?.toLocaleString()} ${currencyFrom}\n` +
       `• Recibirá: ${toFlag} ${metadata.calculated_amount_received?.toLocaleString()} ${currencyTo}\n` +
       `• Beneficiario: ${benefName}\n` +
-      `• Banco: ${beneficiary?.bank_name || 'No especificado'}\n\n` +
+      `• Banco: ${bankName}\n\n` +
       `Tu operación está en cola y será procesada a la brevedad. 🚀`
     );
 

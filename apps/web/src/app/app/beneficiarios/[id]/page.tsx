@@ -120,12 +120,11 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
         const { data: bankData } = await supabase.from('banks').select('id, name, country_code, currency_code, type, code').eq('is_active', true);
         if (bankData) setBanks(bankData);
 
-        // Load beneficiary data with both bank joins
+        // Load beneficiary data
         const { data: beneficiary, error } = await supabase
           .from('user_bank_accounts')
           .select(`*, 
-       bank:banks(name, currency_code),
-       banks_platforms(currency_id, currencies(code))
+       bank:banks(name, currency_code)
      `)
           .eq('id', id)
           .single();
@@ -135,9 +134,9 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
           return;
         }
 
-        // Set form data - use bank_id if available, fallback to bank_platform_id for old records
+        // Set form data - use bank_id
         setFormData({
-          bank_id: beneficiary.bank_id?.toString() || beneficiary.bank_platform_id?.toString() || '',
+          bank_id: beneficiary.bank_id?.toString() || '',
           account_number: beneficiary.account_number || '',
           account_holder: beneficiary.account_holder || '',
           document_number: beneficiary.document_number || '',
@@ -145,13 +144,11 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
           alias: beneficiary.alias || '',
         });
 
-        // Set selected currency based on bank's currency (new or old records)
-        const currCode = beneficiary.bank?.currency_code || beneficiary.banks_platforms?.currencies?.code;
+        // Set selected currency based on bank's currency
+        const currCode = beneficiary.bank?.currency_code;
         if (currCode) {
           const cur = curData?.find(c => c.code === currCode);
           if (cur) setSelectedCurrency(cur.id);
-        } else if (beneficiary.banks_platforms?.currency_id) {
-          setSelectedCurrency(beneficiary.banks_platforms.currency_id);
         }
       } catch (error) {
         console.error('Error loading data:', error);

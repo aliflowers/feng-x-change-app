@@ -56,10 +56,10 @@ export async function handleBeneficiariesList(
       document_number,
       account_type,
       is_active,
-      bank_platform_id,
-      banks_platforms:bank_platform_id(
-        currency_id,
-        currencies:currency_id(code)
+      bank_id,
+      bank:banks(
+        name,
+        currency_code
       )
     `)
     .eq('user_id', session.user_id)
@@ -87,9 +87,12 @@ export async function handleBeneficiariesList(
 
   // Construir lista de beneficiarios
   const rows = beneficiaries.slice(0, 10).map((b: any) => {
-    // Obtener código de moneda si está disponible
-    const currencyCode = b.banks_platforms?.currencies?.code || '';
+    // Obtener código de moneda desde la tabla banks
+    const currencyCode = b.bank?.currency_code || '';
     const flag = currencyFlags[currencyCode] || '';
+
+    // Obtener nombre del banco
+    const bankName = b.bank?.name || b.bank_name || 'Banco';
 
     // Enmascarar número de cuenta (mostrar últimos 4 dígitos)
     const maskedAccount = b.account_number
@@ -99,7 +102,7 @@ export async function handleBeneficiariesList(
     return {
       id: `beneficiary_${b.id}`,
       title: b.alias || b.account_holder || 'Sin nombre',
-      description: `${flag} ${b.bank_name || 'Banco'} ${maskedAccount}`.trim(),
+      description: `${flag} ${bankName} ${maskedAccount}`.trim(),
     };
   });
 
@@ -155,9 +158,9 @@ export async function handleBeneficiaryDetail(
       document_type,
       account_type,
       email,
-      banks_platforms:bank_platform_id(
-        currency_id,
-        currencies:currency_id(code, name)
+      bank:banks(
+        name,
+        currency_code
       )
     `)
     .eq('id', beneficiaryId)
@@ -169,9 +172,9 @@ export async function handleBeneficiaryDetail(
     return;
   }
 
-  // Obtener moneda
-  const currencyCode = (beneficiary as any).banks_platforms?.currencies?.code || 'N/A';
-  const currencyName = (beneficiary as any).banks_platforms?.currencies?.name || '';
+  // Obtener datos del banco
+  const bankName = (beneficiary as any).bank?.name || beneficiary.bank_name || 'No especificado';
+  const currencyCode = (beneficiary as any).bank?.currency_code || 'N/A';
   const flag = currencyFlags[currencyCode] || '';
 
   // Formatear documento
@@ -188,10 +191,10 @@ export async function handleBeneficiaryDetail(
 ${beneficiary.email ? `• Email: ${beneficiary.email}` : ''}
 
 🏦 *Datos bancarios:*
-• Banco: ${beneficiary.bank_name || 'No especificado'}
+• Banco: ${bankName}
 • Cuenta: ${beneficiary.account_number || 'No especificado'}
 ${beneficiary.account_type ? `• Tipo: ${beneficiary.account_type}` : ''}
-• Moneda: ${flag} ${currencyName} (${currencyCode})`;
+• Moneda: ${flag} ${currencyCode}`;
 
   await sendButtonMessage(phoneNumber, {
     header: '👤 Detalle de Beneficiario',

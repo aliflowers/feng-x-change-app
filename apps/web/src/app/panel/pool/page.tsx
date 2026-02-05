@@ -45,7 +45,7 @@ interface PoolOperation {
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { id: number; name: string };
+    bank: { id: number; name: string } | null;
   } | null;
   taken_by_profile: { first_name: string; last_name: string } | null;
 }
@@ -86,6 +86,12 @@ export default function PoolPage() {
   const [takingOperation, setTakingOperation] = useState(false);
   const [verifyingOperation, setVerifyingOperation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Reject modal states
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectingOperation, setRejectingOperation] = useState<PoolOperation | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -150,7 +156,7 @@ export default function PoolPage() {
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(id, name)
+            bank:banks(id, name)
           ),
           taken_by_profile:profiles!transactions_taken_by_fkey(first_name, last_name)
         `)
@@ -242,6 +248,17 @@ export default function PoolPage() {
 
       if (error) throw error;
 
+      // Enviar notificación WhatsApp a usuarios operativos
+      try {
+        await fetch('/api/whatsapp/notify-verified-operation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId: operation.id }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending verification notification:', notifyError);
+      }
+
       // Refresh the list
       loadOperations();
     } catch (error) {
@@ -249,6 +266,62 @@ export default function PoolPage() {
       alert('Error al verificar la operación.');
     } finally {
       setVerifyingOperation(false);
+    }
+  };
+
+  const openRejectModal = (operation: PoolOperation) => {
+    setRejectingOperation(operation);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const closeRejectModal = () => {
+    setShowRejectModal(false);
+    setRejectingOperation(null);
+    setRejectReason('');
+  };
+
+  const handleRejectOperation = async () => {
+    if (!rejectingOperation || !rejectReason.trim()) {
+      alert('Por favor ingresa el motivo del rechazo.');
+      return;
+    }
+    setIsRejecting(true);
+
+    try {
+      // Actualizar estado a REJECTED
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'REJECTED',
+          admin_notes: rejectReason.trim(),
+        })
+        .eq('id', rejectingOperation.id);
+
+      if (error) throw error;
+
+      // Enviar notificación WhatsApp al cliente
+      try {
+        await fetch('/api/whatsapp/notify-rejection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: rejectingOperation.id,
+            reason: rejectReason.trim(),
+          }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending rejection notification:', notifyError);
+      }
+
+      // Cerrar modal y refrescar
+      closeRejectModal();
+      loadOperations();
+    } catch (error) {
+      console.error('Error rejecting operation:', error);
+      alert('Error al rechazar la operación.');
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -267,7 +340,7 @@ export default function PoolPage() {
     const acc = takenOperation.user_bank_account;
     const allData = `Beneficiario: ${acc.account_holder}
 Documento: ${acc.document_type || ''}-${acc.document_number || 'N/A'}
-Banco: ${acc.bank_platform?.name || 'N/A'}
+Banco: ${acc.bank?.name || 'N/A'}
 Número de cuenta: ${acc.account_number}
 Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${takenOperation.to_currency?.code}`;
     await copyToClipboard(allData, 'all');
@@ -483,7 +556,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             <Building2 size={14} className="text-slate-400" />
                             <div>
                               <p className="text-sm font-medium text-slate-700">
-                                {op.user_bank_account.bank_platform?.name}
+                                {op.user_bank_account.bank?.name || 'N/A'}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {op.user_bank_account.account_holder}
@@ -541,14 +614,23 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
 
                           {/* Verify Operation Button - Only for SUPER_ADMIN on POOL status */}
                           {op.status === 'POOL' && userRole === 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => handleVerifyOperation(op)}
-                              disabled={verifyingOperation}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              <ShieldCheck size={16} />
-                              Verificar
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleVerifyOperation(op)}
+                                disabled={verifyingOperation}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                <ShieldCheck size={16} />
+                                Verificar
+                              </button>
+                              <button
+                                onClick={() => openRejectModal(op)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                <XCircle size={16} />
+                                Rechazar
+                              </button>
+                            </>
                           )}
 
                           {/* Take Operation Button - Only for VERIFIED status */}
@@ -699,7 +781,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                 {selectedOperation.user_bank_account && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Banco destino:</span>
-                    <span className="font-medium">{selectedOperation.user_bank_account.bank_platform?.name}</span>
+                    <span className="font-medium">{selectedOperation.user_bank_account.bank?.name || 'N/A'}</span>
                   </div>
                 )}
               </div>
@@ -791,11 +873,11 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   <div>
                     <p className="text-xs text-slate-500">Banco</p>
                     <p className="font-bold text-slate-800">
-                      {takenOperation.user_bank_account?.bank_platform?.name || 'N/A'}
+                      {takenOperation.user_bank_account?.bank?.name || 'N/A'}
                     </p>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank_platform?.name || '', 'bank')}
+                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank?.name || '', 'bank')}
                     className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
                     title="Copiar"
                   >
@@ -875,6 +957,88 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   <ArrowRight size={18} />
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Operation Modal */}
+      {showRejectModal && rejectingOperation && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <XCircle className="text-red-600" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Rechazar Transacción</h3>
+                  <p className="text-sm text-slate-500">{rejectingOperation.transaction_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeRejectModal}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-sm text-slate-600 mb-2">
+                  Cliente: <span className="font-medium text-slate-900">{rejectingOperation.user.first_name} {rejectingOperation.user.last_name}</span>
+                </p>
+                <p className="text-sm text-slate-600">
+                  Monto: <span className="font-medium text-slate-900">{rejectingOperation.from_currency.symbol}{rejectingOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {rejectingOperation.from_currency.code}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Motivo del rechazo <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Escribe el motivo por el cual se rechaza esta transacción. Este mensaje será enviado al cliente por WhatsApp."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-200 focus:border-red-400 transition-all resize-none"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Este mensaje será enviado al cliente vía WhatsApp.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 p-6 border-t border-slate-100">
+              <button
+                onClick={closeRejectModal}
+                disabled={isRejecting}
+                className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRejectOperation}
+                disabled={isRejecting || !rejectReason.trim()}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRejecting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Rechazando...
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={18} />
+                    Confirmar Rechazo
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
