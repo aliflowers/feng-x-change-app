@@ -46,6 +46,14 @@ import {
   handleBeneficiariesList,
   handleBeneficiaryDetail
 } from './beneficiaries-flow';
+import {
+  handleHistorySelectStatus,
+  handleHistoryStatusSelection,
+  handleHistoryPeriodSelection,
+  HISTORY_STATUS_OPTIONS,
+  HISTORY_PERIOD_OPTIONS
+} from './history-flow';
+import { handleProfileShow } from './profile-flow';
 
 // ============================================================================
 // TIPOS DE MENSAJE ENTRANTES
@@ -237,6 +245,28 @@ async function routeByCurrentStep(
       break;
 
     // =========================================================================
+    // FLUJO: MIS OPERACIONES (HISTORIAL)
+    // =========================================================================
+    case 'HISTORY_SELECT_STATUS':
+      await handleHistorySelectStatusStep(session, message, phoneNumber);
+      break;
+
+    case 'HISTORY_SELECT_PERIOD':
+      await handleHistorySelectPeriodStep(session, message, phoneNumber);
+      break;
+
+    case 'HISTORY_SHOW_RESULTS':
+      await handleHistoryShowResultsStep(session, message, phoneNumber, userName);
+      break;
+
+    // =========================================================================
+    // FLUJO: MIS DATOS (PERFIL)
+    // =========================================================================
+    case 'PROFILE_SHOW':
+      await handleProfileShowStep(session, message, phoneNumber, userName);
+      break;
+
+    // =========================================================================
     // DEFAULT
     // =========================================================================
     default:
@@ -278,6 +308,24 @@ async function handleMainMenuStep(
         break;
       case 'BENEFICIARIES_LIST':
         await handleBeneficiariesList(session, phoneNumber);
+        break;
+      case 'HISTORY_SELECT_STATUS':
+        await handleHistorySelectStatus(session, phoneNumber);
+        break;
+      case 'PROFILE_SHOW':
+        // Obtener userId y mostrar perfil
+        const supabase = createServerClient();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('whatsapp_number', session.phone_number)
+          .single();
+        if (profile) {
+          await handleProfileShow(session, phoneNumber, profile.id);
+        } else {
+          await sendTextMessage(phoneNumber, '❌ No encontramos tu perfil.');
+          await sendMainMenu(phoneNumber, userName);
+        }
         break;
     }
   }
@@ -694,3 +742,147 @@ async function handleBeneficiariesDetailStep(
   }
 }
 
+// ============================================================================
+// HANDLERS PASO: MIS OPERACIONES (HISTORIAL)
+// ============================================================================
+
+async function handleHistorySelectStatusStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    // Primera vez: mostrar menú de estados
+    await handleHistorySelectStatus(session, phoneNumber);
+    return;
+  }
+
+  // Si selecciona volver al menú principal
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  // Verificar si es una opción de estado válida
+  const validOptions = Object.values(HISTORY_STATUS_OPTIONS);
+  if (validOptions.includes(selectionId)) {
+    await handleHistoryStatusSelection(session, phoneNumber, selectionId);
+    return;
+  }
+
+  // Opción no válida, volver a mostrar
+  await handleHistorySelectStatus(session, phoneNumber);
+}
+
+async function handleHistorySelectPeriodStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await sendTextMessage(phoneNumber, '❌ Por favor selecciona un período de la lista.');
+    return;
+  }
+
+  // Si selecciona volver al menú principal
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  // Obtener userId de la sesión
+  const supabase = createServerClient();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('whatsapp_number', session.phone_number)
+    .single();
+
+  if (!profile) {
+    await sendTextMessage(phoneNumber, '❌ No encontramos tu perfil. Por favor contacta soporte.');
+    return;
+  }
+
+  // Verificar si es una opción de período válida
+  const validOptions = Object.values(HISTORY_PERIOD_OPTIONS);
+  if (validOptions.includes(selectionId)) {
+    await handleHistoryPeriodSelection(session, phoneNumber, selectionId, profile.id);
+    return;
+  }
+
+  await sendTextMessage(phoneNumber, '❌ Por favor selecciona un período válido.');
+}
+
+async function handleHistoryShowResultsStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (selectionId === 'history_back') {
+    // Volver al menú de estados
+    await handleHistorySelectStatus(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber, userName);
+    return;
+  }
+
+  // Default: volver al menú principal
+  await sendMainMenu(phoneNumber, userName);
+  await transitionTo(session.id, 'MAIN_MENU');
+}
+
+// ============================================================================
+// HANDLERS PASO: MIS DATOS (PERFIL)
+// ============================================================================
+
+async function handleProfileShowStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string,
+  userName?: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  // Primera vez: obtener userId y mostrar perfil
+  if (!selectionId) {
+    const supabase = createServerClient();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('whatsapp_number', session.phone_number)
+      .single();
+
+    if (!profile) {
+      await sendTextMessage(phoneNumber, '❌ No encontramos tu perfil. Por favor contacta soporte.');
+      await sendMainMenu(phoneNumber, userName);
+      await transitionTo(session.id, 'MAIN_MENU');
+      return;
+    }
+
+    await handleProfileShow(session, phoneNumber, profile.id);
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber, userName);
+    return;
+  }
+
+  // Default: volver al menú principal
+  await sendMainMenu(phoneNumber, userName);
+  await transitionTo(session.id, 'MAIN_MENU');
+}

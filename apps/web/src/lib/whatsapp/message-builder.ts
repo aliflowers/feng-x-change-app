@@ -329,11 +329,11 @@ export async function sendMainMenu(to: string, userName?: string): Promise<{ suc
     ],
    },
    {
-    title: 'Mi Cuenta (Próximamente)',
+    title: 'Mi Cuenta',
     rows: [
-     { id: MAIN_MENU_OPTIONS.BENEFICIARIES, title: '👥 Mis beneficiarios', description: 'Próximamente' },
-     { id: MAIN_MENU_OPTIONS.OPERATIONS, title: '📋 Mis operaciones', description: 'Próximamente' },
-     { id: MAIN_MENU_OPTIONS.PROFILE, title: '👤 Mis datos', description: 'Próximamente' },
+     { id: MAIN_MENU_OPTIONS.BENEFICIARIES, title: '👥 Mis beneficiarios', description: 'Ver y gestionar' },
+     { id: MAIN_MENU_OPTIONS.OPERATIONS, title: '📋 Mis operaciones', description: 'Historial de transacciones' },
+     { id: MAIN_MENU_OPTIONS.PROFILE, title: '👤 Mis datos', description: 'Ver mis datos personales' },
     ],
    },
    {
@@ -419,6 +419,7 @@ export async function sendConfirmation(
   buttons: [
    { id: 'confirm_yes', title: '✅ Sí, de acuerdo' },
    { id: 'confirm_no', title: '❌ No, cancelar' },
+   { id: NAVIGATION_ACTIONS.MAIN_MENU, title: '🏠 Menú' },
   ],
  });
 }
@@ -453,8 +454,9 @@ Una vez hayas realizado la transferencia, presiona el botón de abajo.`;
  return sendButtonMessage(to, {
   body,
   buttons: [
-   { id: 'transfer_done', title: '✅ Ya hice la transferencia' },
+   { id: 'transfer_done', title: '✅ Ya transferí' },
    { id: 'transfer_cancel', title: '❌ Cancelar' },
+   { id: NAVIGATION_ACTIONS.MAIN_MENU, title: '🏠 Menú' },
   ],
  });
 }

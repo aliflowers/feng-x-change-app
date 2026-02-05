@@ -54,12 +54,18 @@ export async function handleMainMenuSelection(
       return { nextStep: 'BENEFICIARIES_LIST', handled: true };
 
     case MAIN_MENU_OPTIONS.OPERATIONS:
+      // Ir al flujo de historial de operaciones
+      return { nextStep: 'HISTORY_SELECT_STATUS', handled: true };
+
     case MAIN_MENU_OPTIONS.PROFILE:
+      // Ir al flujo de perfil
+      return { nextStep: 'PROFILE_SHOW', handled: true };
+
     case MAIN_MENU_OPTIONS.SUPPORT:
-      // Opciones deshabilitadas (próximas fases)
+      // Opción deshabilitada (próximas fases)
       await sendTextMessage(
         phoneNumber,
-        '🚧 Esta función estará disponible próximamente.\n\nPor ahora puedes consultar tasas, hacer envíos o ver tus beneficiarios.'
+        '🚧 Esta función estará disponible próximamente.\n\nPor ahora puedes consultar tasas, hacer envíos, ver tus beneficiarios, operaciones o tus datos.'
       );
       await sendMainMenu(phoneNumber, userName);
       return { nextStep: 'MAIN_MENU', handled: true };

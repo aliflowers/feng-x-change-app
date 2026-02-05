@@ -37,6 +37,14 @@ export type ConversationStep =
  | 'BENEFICIARIES_EMPTY'       // Sin beneficiarios
  | 'BENEFICIARIES_DETAIL'      // Detalle de un beneficiario
 
+ // Flujo: Mis operaciones (Historial)
+ | 'HISTORY_SELECT_STATUS'     // Seleccionar filtro de estado
+ | 'HISTORY_SELECT_PERIOD'     // Seleccionar período de tiempo
+ | 'HISTORY_SHOW_RESULTS'      // Mostrar operaciones
+
+ // Flujo: Mis datos (Perfil)
+ | 'PROFILE_SHOW'              // Mostrar datos personales
+
  | 'COMPLETED';                // Operación creada
 
 // ============================================================================
@@ -82,6 +90,9 @@ export interface SessionMetadata {
 
  // ID del último mensaje interactivo (para validación)
  last_interactive_message_id?: string;
+
+ // Flujo de historial
+ selected_history_status?: string;
 }
 
 // ============================================================================
