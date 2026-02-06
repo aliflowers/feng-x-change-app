@@ -29,6 +29,7 @@ interface ProfileData {
   nationality: string | null;
   document_type: string | null;
   document_number: string | null;
+  is_kyc_verified: boolean;
 }
 
 const documentTypes = [
@@ -194,6 +195,7 @@ export default function ProfilePage() {
     nationality: '',
     document_type: '',
     document_number: '',
+    is_kyc_verified: false,
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -223,7 +225,7 @@ export default function ProfilePage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number')
+        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified')
         .eq('id', user.id)
         .single();
 
@@ -335,9 +337,29 @@ export default function ProfilePage() {
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
-        <p className="text-gray-500">Administra tu información personal y configuración de cuenta.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
+          <p className="text-gray-500">Administra tu información personal y configuración de cuenta.</p>
+        </div>
+
+        {/* Badge de verificación KYC */}
+        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${formData.is_kyc_verified
+            ? 'bg-green-100 text-green-700 border border-green-200'
+            : 'bg-amber-100 text-amber-700 border border-amber-200'
+          }`}>
+          {formData.is_kyc_verified ? (
+            <>
+              <CheckCircle2 size={16} />
+              <span>Identidad Verificada</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle size={16} />
+              <span>Verificación Pendiente</span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Formulario de Datos Personales */}

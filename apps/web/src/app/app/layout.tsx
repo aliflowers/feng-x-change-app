@@ -19,6 +19,8 @@ interface UserProfile {
   first_name: string;
   last_name: string;
   email: string;
+  is_kyc_verified: boolean;
+  role: string;
 }
 
 interface BusinessConfig {
@@ -43,6 +45,7 @@ export default function ClientLayout({
   const pathname = usePathname();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
@@ -50,17 +53,39 @@ export default function ClientLayout({
     logo_url: '',
   });
 
+  // Rutas que no requieren KYC verificado
+  const kycExemptPaths = [
+    '/app/verificar-identidad',
+    '/app/verificar-identidad/callback',
+  ];
+
   useEffect(() => {
     const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, email')
-          .eq('id', user.id)
-          .single();
-        if (data) setProfile(data);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, email, is_kyc_verified, role')
+            .eq('id', user.id)
+            .single();
+          if (data) {
+            setProfile(data);
+
+            // Verificar si el usuario necesita KYC
+            const needsKyc = ['CLIENT', 'AFFILIATE'].includes(data.role) && !data.is_kyc_verified;
+            const isExemptPath = kycExemptPaths.some(path => pathname.startsWith(path));
+
+            if (needsKyc && !isExemptPath) {
+              router.push('/app/verificar-identidad');
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
       }
+      setIsLoading(false);
     };
     const loadBusinessConfig = async () => {
       try {
@@ -80,7 +105,7 @@ export default function ClientLayout({
     };
     loadProfile();
     loadBusinessConfig();
-  }, []);
+  }, [pathname, router]);
 
   // Close menu when clicking outside (only when menu is open)
   useEffect(() => {
@@ -111,6 +136,14 @@ export default function ClientLayout({
     if (!profile) return 'U';
     return `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || 'U';
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#05294F]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 pb-20 md:pb-0">

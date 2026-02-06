@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Shield, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -21,6 +19,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [countryCode, setCountryCode] = useState('+58');
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
   // Países disponibles con sus códigos telefónicos
   const countries = [
@@ -89,8 +88,8 @@ export default function RegisterPage() {
       }
 
       if (data.user) {
-        // Redirigir al dashboard del cliente
-        router.push('/app');
+        // Mostrar pantalla de confirmación de email
+        setRegistrationComplete(true);
       }
     } catch (err) {
       setError('Error al registrarse. Intenta de nuevo.');
@@ -99,6 +98,40 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  // Pantalla de confirmación de email
+  if (registrationComplete) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Mail size={40} className="text-green-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              ¡Revisa tu correo!
+            </h1>
+            <p className="text-gray-500 mb-6">
+              Hemos enviado un enlace de confirmación a <strong className="text-gray-700">{formData.email}</strong>.
+              Haz clic en el enlace para activar tu cuenta.
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <p className="text-sm text-blue-700">
+                📧 ¿No ves el correo? Revisa tu carpeta de spam o correo no deseado.
+              </p>
+            </div>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 bg-[#05294F] hover:bg-[#063a6b] text-white font-medium px-6 py-3 rounded-xl transition-colors"
+            >
+              Ir al inicio de sesión
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen flex">
