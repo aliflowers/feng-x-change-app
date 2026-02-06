@@ -46,8 +46,8 @@ export async function handleMainMenuSelection(
       return { nextStep: 'RATES_SELECT_CURRENCY', handled: true };
 
     case MAIN_MENU_OPTIONS.SEND:
-      // Ir al flujo de envío
-      return { nextStep: 'SEND_SELECT_CURRENCY', handled: true };
+      // Ir al flujo de envío (primero selecciona tipo)
+      return { nextStep: 'SEND_SELECT_TYPE', handled: true };
 
     case MAIN_MENU_OPTIONS.BENEFICIARIES:
       // Ir al flujo de beneficiarios

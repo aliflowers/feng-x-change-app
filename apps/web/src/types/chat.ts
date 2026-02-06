@@ -45,6 +45,16 @@ export type ConversationStep =
  // Flujo: Mis datos (Perfil)
  | 'PROFILE_SHOW'              // Mostrar datos personales
 
+ // Flujo: Envío múltiple
+ | 'SEND_SELECT_TYPE'          // Seleccionar 1 o varios beneficiarios
+ | 'MULTI_SELECT_CURRENCY'     // Seleccionar moneda (múltiple)
+ | 'MULTI_SELECT_METHOD'       // Seleccionar método (múltiple)
+ | 'MULTI_SELECT_BENEFICIARY'  // Agregar beneficiario a lista
+ | 'MULTI_INPUT_AMOUNT'        // Monto para beneficiario
+ | 'MULTI_LIST_VIEW'           // Ver lista de envíos
+ | 'MULTI_SHOW_ACCOUNT'        // Cuenta empresa (múltiple)
+ | 'MULTI_UPLOAD_PROOF'        // Subir comprobante (múltiple)
+
  | 'COMPLETED';                // Operación creada
 
 // ============================================================================
@@ -60,6 +70,18 @@ export interface ExtractedOCRData {
  date?: string;
  bank?: string;
  confidence: number; // 0-1
+}
+
+/**
+ * Item en la lista de envíos múltiples
+ */
+export interface SendListItem {
+ beneficiary_id: string;
+ beneficiary_name: string;
+ bank_name: string;
+ amount_send: number;
+ amount_receive: number;
+ rate: number;
 }
 
 /**
@@ -93,6 +115,9 @@ export interface SessionMetadata {
 
  // Flujo de historial
  selected_history_status?: string;
+
+ // Flujo de envío múltiple
+ send_list_items?: SendListItem[];
 }
 
 // ============================================================================

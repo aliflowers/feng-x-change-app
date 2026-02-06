@@ -54,6 +54,20 @@ import {
   HISTORY_PERIOD_OPTIONS
 } from './history-flow';
 import { handleProfileShow } from './profile-flow';
+import {
+  handleSendSelectType,
+  handleMultiSelectCurrency,
+  handleMultiSelectMethod,
+  handleMultiSelectBeneficiary,
+  handleMultiInputAmount,
+  handleMultiAddToList,
+  showMultiListView,
+  handleMultiRemoveLast,
+  handleMultiShowAccount,
+  handleMultiUploadProof,
+  handleMultiCreateTransactions,
+  SEND_TYPE_OPTIONS
+} from './multi-send-flow';
 
 // ============================================================================
 // TIPOS DE MENSAJE ENTRANTES
@@ -267,6 +281,41 @@ async function routeByCurrentStep(
       break;
 
     // =========================================================================
+    // FLUJO: ENVÍO MÚLTIPLE
+    // =========================================================================
+    case 'SEND_SELECT_TYPE':
+      await handleSendSelectTypeStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_SELECT_CURRENCY':
+      await handleMultiSelectCurrencyStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_SELECT_METHOD':
+      await handleMultiSelectMethodStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_SELECT_BENEFICIARY':
+      await handleMultiSelectBeneficiaryStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_INPUT_AMOUNT':
+      await handleMultiInputAmountStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_LIST_VIEW':
+      await handleMultiListViewStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_SHOW_ACCOUNT':
+      await handleMultiShowAccountStep(session, message, phoneNumber);
+      break;
+
+    case 'MULTI_UPLOAD_PROOF':
+      await handleMultiUploadProofStep(session, message, phoneNumber);
+      break;
+
+    // =========================================================================
     // DEFAULT
     // =========================================================================
     default:
@@ -305,6 +354,9 @@ async function handleMainMenuStep(
         break;
       case 'SEND_SELECT_CURRENCY':
         await handleSendSelectCurrency(session, phoneNumber);
+        break;
+      case 'SEND_SELECT_TYPE':
+        await handleSendSelectType(session, phoneNumber);
         break;
       case 'BENEFICIARIES_LIST':
         await handleBeneficiariesList(session, phoneNumber);
@@ -885,4 +937,343 @@ async function handleProfileShowStep(
   // Default: volver al menú principal
   await sendMainMenu(phoneNumber, userName);
   await transitionTo(session.id, 'MAIN_MENU');
+}
+
+// ============================================================================
+// HANDLERS PASO: ENVÍO MÚLTIPLE
+// ============================================================================
+
+async function handleSendSelectTypeStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await handleSendSelectType(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId === SEND_TYPE_OPTIONS.SINGLE) {
+    // Flujo individual: ir a selección de moneda normal
+    await handleSendSelectCurrency(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === SEND_TYPE_OPTIONS.MULTIPLE) {
+    // Flujo múltiple: ir a selección de moneda múltiple
+    await handleMultiSelectCurrency(session, phoneNumber);
+    return;
+  }
+
+  await handleSendSelectType(session, phoneNumber);
+}
+
+async function handleMultiSelectCurrencyStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await handleMultiSelectCurrency(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId.startsWith('multi_currency_')) {
+    const currencyCode = selectionId.replace('multi_currency_', '');
+    await handleMultiSelectMethod(session, phoneNumber, currencyCode);
+    return;
+  }
+
+  await handleMultiSelectCurrency(session, phoneNumber);
+}
+
+async function handleMultiSelectMethodStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await sendTextMessage(phoneNumber, '❌ Por favor selecciona un método de pago.');
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId.startsWith('multi_method_')) {
+    const methodId = selectionId.replace('multi_method_', '');
+    const userId = await getUserId(session.phone_number);
+    if (userId) {
+      await handleMultiSelectBeneficiary(session, phoneNumber, methodId, userId);
+    } else {
+      await sendTextMessage(phoneNumber, '❌ No encontramos tu perfil.');
+    }
+    return;
+  }
+
+  await sendTextMessage(phoneNumber, '❌ Método no válido.');
+}
+
+async function handleMultiSelectBeneficiaryStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    const userId = await getUserId(session.phone_number);
+    const methodId = session.metadata?.selected_payment_method_id || '';
+    if (userId) {
+      await handleMultiSelectBeneficiary(session, phoneNumber, methodId, userId);
+    }
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId.startsWith('multi_benef_')) {
+    const beneficiaryId = selectionId.replace('multi_benef_', '');
+    await handleMultiInputAmount(session, phoneNumber, beneficiaryId);
+    return;
+  }
+
+  await sendTextMessage(phoneNumber, '❌ Beneficiario no válido.');
+}
+
+async function handleMultiInputAmountStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  // El usuario debe escribir un monto en texto
+  const text = message.type === 'text' ? message.text?.body?.trim() : null;
+
+  if (!text) {
+    await sendTextMessage(phoneNumber, '❌ Por favor escribe el monto a enviar.');
+    return;
+  }
+
+  // Parsear monto
+  const amount = parseFloat(text.replace(/[^0-9.]/g, ''));
+
+  if (isNaN(amount) || amount <= 0) {
+    await sendTextMessage(phoneNumber, '❌ Monto no válido. Escribe solo números.\n\n_Ejemplo: 100_');
+    return;
+  }
+
+  const userId = await getUserId(session.phone_number);
+  if (userId) {
+    await handleMultiAddToList(session, phoneNumber, amount, userId);
+  }
+}
+
+async function handleMultiListViewStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+  const userId = await getUserId(session.phone_number);
+
+  if (!selectionId) {
+    if (userId) {
+      await showMultiListView(session, phoneNumber, userId);
+    }
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'multi_add_another') {
+    const methodId = session.metadata?.selected_payment_method_id || '';
+    if (userId) {
+      await handleMultiSelectBeneficiary(session, phoneNumber, methodId, userId);
+    }
+    return;
+  }
+
+  if (selectionId === 'multi_confirm') {
+    await handleMultiShowAccount(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'multi_remove_last') {
+    if (userId) {
+      await handleMultiRemoveLast(session, phoneNumber, userId);
+    }
+    return;
+  }
+
+  if (userId) {
+    await showMultiListView(session, phoneNumber, userId);
+  }
+}
+
+async function handleMultiShowAccountStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  const selectionId = extractSelectionId(message);
+
+  if (!selectionId) {
+    await handleMultiShowAccount(session, phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'nav_main_menu' || selectionId === 'multi_cancel') {
+    await resetSession(session.id);
+    await sendMainMenu(phoneNumber);
+    return;
+  }
+
+  if (selectionId === 'multi_payment_done') {
+    await handleMultiUploadProof(session, phoneNumber);
+    return;
+  }
+
+  await handleMultiShowAccount(session, phoneNumber);
+}
+
+async function handleMultiUploadProofStep(
+  session: ChatSession,
+  message: IncomingMessage,
+  phoneNumber: string
+): Promise<void> {
+  // Verificar si es imagen
+  if (message.type !== 'image') {
+    await sendTextMessage(phoneNumber,
+      '📸 Por favor envía una *imagen* de tu comprobante de pago.\n\n' +
+      '_Puedes tomar una foto o enviar una captura de pantalla._'
+    );
+    return;
+  }
+
+  const imageId = message.image?.id;
+  if (!imageId) {
+    await sendTextMessage(phoneNumber, '❌ No pudimos procesar la imagen. Intenta de nuevo.');
+    return;
+  }
+
+  let proofUrl: string | null = null;
+  const supabase = createServerClient();
+
+  try {
+    console.log('[Multi] handleMultiUploadProofStep - Iniciando proceso de comprobante');
+    // Obtener config de WhatsApp (igual que flujo individual)
+    const { data: waConfig, error: configError } = await supabase
+      .from('notification_config')
+      .select('config')
+      .eq('provider', 'whatsapp')
+      .single();
+
+    console.log('[Multi] Config obtenida:', waConfig ? 'SI' : 'NO', 'Error:', configError?.message);
+
+    if (waConfig?.config) {
+      const config = waConfig.config as { access_token_encrypted?: string };
+      if (config.access_token_encrypted) {
+        const { decrypt, isEncrypted } = await import('@/lib/crypto');
+        const token = isEncrypted(config.access_token_encrypted)
+          ? await decrypt(config.access_token_encrypted)
+          : config.access_token_encrypted;
+
+        console.log('[Multi] Descargando imagen con token desencriptado...');
+
+        // Descargar imagen para guardarla en storage
+        const mediaInfoResponse = await fetch(
+          `https://graph.facebook.com/v21.0/${imageId}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+
+        if (mediaInfoResponse.ok) {
+          const mediaInfo = await mediaInfoResponse.json();
+          console.log('[Multi] Media URL obtenida:', mediaInfo.url?.slice(0, 50));
+
+          const downloadResponse = await fetch(mediaInfo.url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (downloadResponse.ok) {
+            const arrayBuffer = await downloadResponse.arrayBuffer();
+            console.log('[Multi] Imagen descargada, tamaño:', arrayBuffer.byteLength);
+
+            const fileName = `proofs/${session.user_id || phoneNumber}/${Date.now()}.jpg`;
+
+            // Subir a Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('proofs')
+              .upload(fileName, arrayBuffer, {
+                contentType: 'image/jpeg',
+                upsert: false
+              });
+
+            if (!uploadError && uploadData) {
+              const { data: publicUrl } = supabase.storage
+                .from('proofs')
+                .getPublicUrl(fileName);
+              proofUrl = publicUrl.publicUrl;
+              console.log('[Multi] Comprobante subido:', proofUrl);
+            } else {
+              console.error('[Multi] Error subiendo:', uploadError);
+            }
+          }
+        } else {
+          console.error('[Multi] Error obteniendo mediaInfo:', await mediaInfoResponse.text());
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[Multi] Error procesando comprobante:', error);
+  }
+
+  if (!proofUrl) {
+    await sendTextMessage(phoneNumber, '❌ Error al procesar el comprobante. Intenta de nuevo.');
+    return;
+  }
+
+  const userId = await getUserId(session.phone_number);
+  if (userId) {
+    await handleMultiCreateTransactions(session, phoneNumber, proofUrl, userId);
+  }
+}
+
+// Utilidad para obtener userId
+async function getUserId(whatsappNumber: string): Promise<string | null> {
+  const supabase = createServerClient();
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('whatsapp_number', whatsappNumber)
+    .single();
+  return data?.id || null;
 }
