@@ -30,6 +30,7 @@ interface ProfileData {
   document_type: string | null;
   document_number: string | null;
   is_kyc_verified: boolean;
+  avatar_url: string | null;
 }
 
 const documentTypes = [
@@ -185,6 +186,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<ProfileData>({
     first_name: '',
@@ -196,6 +198,7 @@ export default function ProfilePage() {
     document_type: '',
     document_number: '',
     is_kyc_verified: false,
+    avatar_url: null,
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -225,13 +228,28 @@ export default function ProfilePage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified')
+        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified, avatar_url')
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
       if (data) {
         setFormData(data);
+
+        // Cargar avatar si existe
+        if (data.avatar_url) {
+          if (data.avatar_url.startsWith('http')) {
+            setAvatarUrl(data.avatar_url);
+          } else {
+            const { data: signedData, error: signedError } = await supabase.storage
+              .from('kyc')
+              .createSignedUrl(data.avatar_url, 3600);
+
+            if (!signedError && signedData) {
+              setAvatarUrl(signedData.signedUrl);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -373,6 +391,28 @@ export default function ProfilePage() {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Avatar del Cliente */}
+          <div className="flex justify-center -mt-3 mb-6">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold transition-transform group-hover:scale-105">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Perfil"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{formData.first_name?.[0]}{formData.last_name?.[0]}</span>
+                )}
+              </div>
+              {formData.is_kyc_verified && (
+                <div className="absolute -bottom-1 -right-1 bg-green-500 text-white p-1.5 rounded-full border-2 border-white shadow-sm" title="Identidad Verificada">
+                  <CheckCircle2 size={16} />
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Nombres */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">

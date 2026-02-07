@@ -249,6 +249,37 @@ export async function POST(request: NextRequest) {
                          }
                     }
 
+                    // 3. Procesar Imagen de Perfil (Portrait de Didit)
+                    if (sessionDetails.portrait_image) {
+                         try {
+                              console.log('[Didit Webhook] Descargando imagen de perfil:', sessionDetails.portrait_image);
+                              const imageResponse = await fetch(sessionDetails.portrait_image);
+
+                              if (imageResponse.ok) {
+                                   const imageBuffer = await imageResponse.arrayBuffer();
+                                   const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+                                   const fileName = `${verification.user_id}/avatar_${Date.now()}.jpg`;
+
+                                   const { error: uploadError } = await supabase.storage
+                                        .from('kyc')
+                                        .upload(fileName, imageBuffer, {
+                                             contentType,
+                                             upsert: true
+                                        });
+
+                                   if (uploadError) {
+                                        console.error('[Didit Webhook] Error subiendo imagen a Storage:', uploadError);
+                                   } else {
+                                        // Guardar el path en el perfil
+                                        updateProfileData.avatar_url = fileName;
+                                        console.log('[Didit Webhook] Imagen de perfil guardada en Storage:', fileName);
+                                   }
+                              }
+                         } catch (imageError) {
+                              console.error('[Didit Webhook] Error procesando imagen de perfil:', imageError);
+                         }
+                    }
+
                     console.log('[Didit Webhook] Actualizando perfil con:', updateProfileData);
 
                     const { error: profileError } = await supabase

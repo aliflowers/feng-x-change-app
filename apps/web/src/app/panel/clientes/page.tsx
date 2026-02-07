@@ -38,6 +38,7 @@ interface Client {
   is_kyc_verified: boolean;
   created_at: string;
   updated_at: string;
+  avatar_url: string | null;
   // Stats
   total_transactions?: number;
 }
@@ -69,6 +70,7 @@ export default function ClientesPage() {
   const [clientBeneficiaries, setClientBeneficiaries] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
+  const [clientAvatarUrl, setClientAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadInitialData();
@@ -77,6 +79,30 @@ export default function ClientesPage() {
   useEffect(() => {
     loadClients();
   }, [currentPage, searchQuery, kycFilter, countryFilter]);
+
+  const handleOpenDetailModal = async (client: Client) => {
+    setSelectedClient(client);
+    setClientAvatarUrl(null);
+    setShowDetailModal(true);
+
+    if (client.avatar_url) {
+      if (client.avatar_url.startsWith('http')) {
+        setClientAvatarUrl(client.avatar_url);
+      } else {
+        try {
+          const { data, error } = await supabase.storage
+            .from('kyc')
+            .createSignedUrl(client.avatar_url, 3600);
+
+          if (!error && data) {
+            setClientAvatarUrl(data.signedUrl);
+          }
+        } catch (err) {
+          console.error('Error fetching signed avatar:', err);
+        }
+      }
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -105,7 +131,8 @@ export default function ClientesPage() {
           role,
           is_kyc_verified,
           created_at,
-          updated_at
+          updated_at,
+          avatar_url
         `, { count: 'exact' })
         .eq('role', 'CLIENT');
 
@@ -510,10 +537,7 @@ export default function ClientesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => {
-                              setSelectedClient(client);
-                              setShowDetailModal(true);
-                            }}
+                            onClick={() => handleOpenDetailModal(client)}
                             className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600"
                             title="Ver perfil"
                           >
@@ -579,10 +603,7 @@ export default function ClientesPage() {
                   <div className="flex items-center justify-end">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
-                          setSelectedClient(client);
-                          setShowDetailModal(true);
-                        }}
+                        onClick={() => handleOpenDetailModal(client)}
                         className="flex items-center gap-1 text-blue-600 text-sm font-medium"
                       >
                         <Eye size={16} />
@@ -682,8 +703,18 @@ export default function ClientesPage() {
             <div className="p-6 space-y-6">
               {/* Avatar and Name */}
               <div className="text-center">
-                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
-                  {selectedClient.first_name?.[0]}{selectedClient.last_name?.[0]}
+                <div className="w-24 h-24 mx-auto rounded-full overflow-hidden border-4 border-white shadow-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold">
+                  {clientAvatarUrl ? (
+                    <img
+                      src={clientAvatarUrl}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>
+                      {selectedClient.first_name?.[0]}{selectedClient.last_name?.[0]}
+                    </span>
+                  )}
                 </div>
                 <h3 className="mt-3 text-xl font-bold text-slate-800">
                   {selectedClient.first_name} {selectedClient.last_name}
