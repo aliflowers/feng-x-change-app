@@ -345,8 +345,8 @@ export default function ProfilePage() {
 
         {/* Badge de verificación KYC */}
         <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${formData.is_kyc_verified
-            ? 'bg-green-100 text-green-700 border border-green-200'
-            : 'bg-amber-100 text-amber-700 border border-amber-200'
+          ? 'bg-green-100 text-green-700 border border-green-200'
+          : 'bg-amber-100 text-amber-700 border border-amber-200'
           }`}>
           {formData.is_kyc_verified ? (
             <>
@@ -444,8 +444,9 @@ export default function ProfilePage() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowNationalityDropdown(!showNationalityDropdown)}
-                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
+                  onClick={() => !formData.is_kyc_verified && setShowNationalityDropdown(!showNationalityDropdown)}
+                  disabled={formData.is_kyc_verified}
+                  className={`input w-full flex items-center gap-3 text-left ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {formData.nationality ? (
                     <>
@@ -492,8 +493,9 @@ export default function ProfilePage() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
+                  onClick={() => !formData.is_kyc_verified && setShowCountryDropdown(!showCountryDropdown)}
+                  disabled={formData.is_kyc_verified}
+                  className={`input w-full flex items-center gap-3 text-left ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {formData.country ? (
                     <>
@@ -544,7 +546,8 @@ export default function ProfilePage() {
                   name="document_type"
                   value={formData.document_type || ''}
                   onChange={handleChange}
-                  className="input appearance-none pl-10"
+                  disabled={formData.is_kyc_verified}
+                  className={`input appearance-none pl-10 ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Selecciona tipo</option>
                   {documentTypes.map(dt => (
@@ -562,7 +565,8 @@ export default function ProfilePage() {
                   name="document_number"
                   value={formData.document_number || ''}
                   onChange={handleChange}
-                  className="input pl-10"
+                  disabled={formData.is_kyc_verified}
+                  className={`input pl-10 ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                   placeholder="V12345678"
                 />
                 <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />

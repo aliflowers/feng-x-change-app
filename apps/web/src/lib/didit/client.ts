@@ -19,18 +19,21 @@ export interface CreateSessionOptions {
 
 export interface DiditWebhookPayload {
  session_id: string;
+ vendor_data?: string;
  status: 'approved' | 'declined' | 'expired' | 'in review' | 'review_needed';
  workflow_id: string;
  decision: {
   kyc?: {
    document_type?: string;
    document_country?: string;
+   document_number?: string;
   };
   face_match?: {
    score?: number;
   };
   decline_reasons?: string[];
  };
+ raw_decision?: any;
  created_at: string;
  completed_at: string;
 }
@@ -38,10 +41,9 @@ export interface DiditWebhookPayload {
 // Configuración desde variables de entorno
 let DIDIT_API_URL = process.env.DIDIT_API_URL || 'https://verification.didit.me/v3';
 
-// Corrección automática: Las URLs anteriores (apx, api) no funcionan para crear sesiones con API Key
-// Forzamos la URL correcta de la API de verificación v3
-if (DIDIT_API_URL.includes('apx.didit.me') || DIDIT_API_URL.includes('api.didit.me')) {
- console.warn('[Didit] URL base detectada incorrecta, cambiando a verification.didit.me/v3');
+// Forzar V3 si se detectan URLs antiguas o si el webhook es v3.0 (Recomendado)
+if (DIDIT_API_URL.includes('apx.didit.me') || DIDIT_API_URL.includes('api.didit.me') || DIDIT_API_URL.endsWith('/v2')) {
+ console.warn('[Didit] URL detectada como v2/Legacy, cambiando a la recomendada v3 para compatibilidad con webhooks v3.0');
  DIDIT_API_URL = 'https://verification.didit.me/v3';
 }
 
@@ -59,7 +61,7 @@ export async function createVerificationSession(
   throw new Error('DIDIT_API_KEY y DIDIT_WORKFLOW_ID son requeridos');
  }
 
- // IMPORTANTE: v3/session/ requiere trailing slash a veces
+ // En V3, el endpoint de creación es /session/ (singular y con slash final)
  const endpoint = `${DIDIT_API_URL}/session/`;
  console.log('[Didit] Creating session at:', endpoint);
 
@@ -96,32 +98,77 @@ export async function createVerificationSession(
 /**
  * Obtiene el estado de una sesión de verificación
  */
-export async function getVerificationSession(sessionId: string): Promise<DiditSession | null> {
+export async function getVerificationSession(sessionId: string): Promise<any | null> {
  if (!DIDIT_API_KEY) {
   throw new Error('DIDIT_API_KEY es requerido');
  }
 
- const response = await fetch(`${DIDIT_API_URL}/verification-sessions/${sessionId}`, {
-  method: 'GET',
-  headers: {
-   'x-api-key': DIDIT_API_KEY,
-  },
- });
+ try {
+  // 1. Intentar endpoint de detalle directo (V3 suele usar /sessions/id)
+  const response = await fetch(`${DIDIT_API_URL}/sessions/${sessionId}`, {
+   method: 'GET',
+   headers: {
+    'x-api-key': DIDIT_API_KEY,
+   },
+  });
 
- if (!response.ok) {
-  if (response.status === 404) {
+  if (response.ok) {
+   return await response.json();
+  }
+
+  // Fallback 1: Intentar /session/id/ (singular)
+  const singularResponse = await fetch(`${DIDIT_API_URL}/session/${sessionId}/`, {
+   method: 'GET',
+   headers: { 'x-api-key': DIDIT_API_KEY },
+  });
+  if (singularResponse.ok) return await singularResponse.json();
+
+  // Fallback 2: buscar en lista filtrada
+  if (response.status === 404 || singularResponse.status === 404) {
+   console.warn(`[Didit] Sesión ${sessionId} no encontrada en detalle, buscando en lista...`);
+   const listResponse = await fetch(`${DIDIT_API_URL}/sessions?session_id=${sessionId}`, {
+    method: 'GET',
+    headers: {
+     'x-api-key': DIDIT_API_KEY,
+    },
+   });
+
+   if (listResponse.ok) {
+    const listData = await listResponse.json();
+    const sessions = listData.results || listData.items || listData.sessions || [];
+    const found = sessions.find((s: any) => s.session_id === sessionId || s.id === sessionId);
+
+    if (found) {
+     console.log(`[Didit] Sesión ${sessionId} encontrada en lista (fallback).`);
+     return found;
+    }
+   }
+
    return null;
   }
+
   throw new Error(`Error al obtener sesión: ${response.status}`);
+ } catch (e) {
+  console.error('[Didit] Error en getVerificationSession:', e);
+  throw e;
  }
+}
 
- const data = await response.json();
+/**
+ * Obtiene el código de país (ISO 2) desde una IP usando API pública
+ */
+export async function getCountryFromIP(ip: string): Promise<string | null> {
+ try {
+  // Usar ip-api.com (gratis, sin key para uso moderado)
+  const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode`);
+  if (!response.ok) return null;
 
- return {
-  session_id: data.session_id,
-  verification_url: data.verification_url,
-  status: data.status,
- };
+  const data = await response.json();
+  return data.status === 'success' ? data.countryCode : null;
+ } catch (e) {
+  console.error('[GeoIP] Error obteniendo país:', e);
+  return null;
+ }
 }
 
 /**
@@ -198,6 +245,7 @@ export function parseWebhookPayload(rawPayload: string): DiditWebhookPayload | n
 
   return {
    session_id: data.session_id,
+   vendor_data: data.vendor_data,
    status: data.status,
    workflow_id: data.workflow_id,
    decision: {
@@ -205,6 +253,7 @@ export function parseWebhookPayload(rawPayload: string): DiditWebhookPayload | n
     face_match: data.decision?.face_match,
     decline_reasons: data.decision?.decline_reasons,
    },
+   raw_decision: data.decision,
    created_at: data.created_at,
    completed_at: data.completed_at,
   };
