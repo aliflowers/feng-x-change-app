@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { initializeSession } from '@/lib/session-config';
@@ -11,7 +11,7 @@ interface BusinessConfig {
   logo_url: string;
 }
 
-export default function BackofficeLoginPage() {
+function BackofficeLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -482,5 +482,13 @@ export default function BackofficeLoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function BackofficeLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div><p>Cargando panel de administración...</p></div>}>
+      <BackofficeLoginForm />
+    </Suspense>
   );
 }
