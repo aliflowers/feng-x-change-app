@@ -65,7 +65,7 @@ export const clienteService = {
   // Client-side search filter
   if (searchQuery.trim()) {
    const search = searchQuery.toLowerCase();
-   clientsList = clientsList.filter(c =>
+   clientsList = clientsList.filter((c: any) =>
     c.first_name?.toLowerCase().includes(search) ||
     c.last_name?.toLowerCase().includes(search) ||
     c.email?.toLowerCase().includes(search) ||
@@ -127,7 +127,7 @@ export const clienteService = {
 
   if (error) throw error;
 
-  return (data || []).map(t => {
+  return (data || []).map((t: any) => {
    const userBankAccount = Array.isArray(t.user_bank_account) ? t.user_bank_account[0] : t.user_bank_account;
    return {
     ...t,
@@ -171,9 +171,9 @@ export const clienteService = {
    throw error;
   }
 
-  const activeBeneficiaries = (data || []).filter(b => b.is_active !== false);
+  const activeBeneficiaries = (data || []).filter((b: any) => b.is_active !== false);
 
-  return activeBeneficiaries.map(b => ({
+  return activeBeneficiaries.map((b: any) => ({
    ...b,
    bank: Array.isArray(b.bank) ? b.bank[0] : b.bank,
    bank_platform: Array.isArray(b.bank_platform) ? b.bank_platform[0] : b.bank_platform,
