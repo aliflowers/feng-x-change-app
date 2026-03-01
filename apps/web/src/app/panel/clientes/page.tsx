@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { clienteService } from '@/services/cliente.service';
 import {
   Users,
   Search,
@@ -86,20 +86,9 @@ export default function ClientesPage() {
     setShowDetailModal(true);
 
     if (client.avatar_url) {
-      if (client.avatar_url.startsWith('http')) {
-        setClientAvatarUrl(client.avatar_url);
-      } else {
-        try {
-          const { data, error } = await supabase.storage
-            .from('kyc')
-            .createSignedUrl(client.avatar_url, 3600);
-
-          if (!error && data) {
-            setClientAvatarUrl(data.signedUrl);
-          }
-        } catch (err) {
-          console.error('Error fetching signed avatar:', err);
-        }
+      const url = await clienteService.getSignedAvatarUrl(client.avatar_url);
+      if (url) {
+        setClientAvatarUrl(url);
       }
     }
   };
@@ -115,66 +104,16 @@ export default function ClientesPage() {
   const loadClients = useCallback(async () => {
     setLoading(true);
     try {
-      // Build query - only get CLIENT role users
-      let query = supabase
-        .from('profiles')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          email,
-          phone_number,
-          country,
-          nationality,
-          document_type,
-          document_number,
-          role,
-          is_kyc_verified,
-          created_at,
-          updated_at,
-          avatar_url
-        `, { count: 'exact' })
-        .eq('role', 'CLIENT');
+      const response = await clienteService.getClients({
+        currentPage,
+        itemsPerPage: ITEMS_PER_PAGE,
+        searchQuery,
+        kycFilter,
+        countryFilter
+      });
 
-      // Apply filters
-      if (kycFilter === 'verified') {
-        query = query.eq('is_kyc_verified', true);
-      } else if (kycFilter === 'pending') {
-        query = query.eq('is_kyc_verified', false);
-      }
-
-      if (countryFilter) {
-        query = query.eq('country', countryFilter);
-      }
-
-      // Pagination
-      const from = (currentPage - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-
-      query = query
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      const { data, count, error } = await query;
-
-      if (error) throw error;
-
-      let clientsList = data || [];
-
-      // Client-side search filter
-      if (searchQuery.trim()) {
-        const search = searchQuery.toLowerCase();
-        clientsList = clientsList.filter(c =>
-          c.first_name?.toLowerCase().includes(search) ||
-          c.last_name?.toLowerCase().includes(search) ||
-          c.email?.toLowerCase().includes(search) ||
-          c.document_number?.toLowerCase().includes(search) ||
-          c.phone_number?.toLowerCase().includes(search)
-        );
-      }
-
-      setClients(clientsList as Client[]);
-      setTotalCount(count || 0);
+      setClients(response.clients as Client[]);
+      setTotalCount(response.count);
     } catch (error) {
       console.error('Error loading clients:', error);
     } finally {
@@ -185,47 +124,8 @@ export default function ClientesPage() {
   const loadClientTransactions = async (clientId: string) => {
     setLoadingTransactions(true);
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          id,
-          transaction_number,
-          amount_sent,
-          amount_received,
-          exchange_rate_applied,
-          status,
-          created_at,
-          paid_at,
-          payment_reference,
-          from_currency:currencies!transactions_from_currency_id_fkey(code, symbol, name),
-          to_currency:currencies!transactions_to_currency_id_fkey(code, symbol, name),
-          user_bank_account:user_bank_accounts!transactions_user_bank_account_id_fkey(
-            account_holder,
-            account_number,
-            bank_platform:banks_platforms(name, type)
-          )
-        `)
-        .eq('user_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-
-      // Transform data
-      const transformed = (data || []).map(t => {
-        const userBankAccount = Array.isArray(t.user_bank_account) ? t.user_bank_account[0] : t.user_bank_account;
-        return {
-          ...t,
-          from_currency: Array.isArray(t.from_currency) ? t.from_currency[0] : t.from_currency,
-          to_currency: Array.isArray(t.to_currency) ? t.to_currency[0] : t.to_currency,
-          user_bank_account: userBankAccount ? {
-            ...userBankAccount,
-            bank_platform: Array.isArray(userBankAccount.bank_platform) ? userBankAccount.bank_platform[0] : userBankAccount.bank_platform
-          } : null
-        };
-      });
-
-      setClientTransactions(transformed);
+      const transactions = await clienteService.getClientTransactions(clientId);
+      setClientTransactions(transactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
     } finally {
@@ -236,43 +136,8 @@ export default function ClientesPage() {
   const loadClientBeneficiaries = async (clientId: string) => {
     setLoadingBeneficiaries(true);
     try {
-      const { data, error } = await supabase
-        .from('user_bank_accounts')
-        .select(`
-          id,
-          account_holder,
-          account_number,
-          document_type,
-          document_number,
-          is_active,
-          created_at,
-          bank:banks(id, name, type, currency_code),
-          bank_platform:banks_platforms(id, name, type)
-        `)
-        .eq('user_id', clientId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw error;
-      }
-
-      // Filtrar solo activos (por si acaso queda alguno con soft-delete)
-      const activeBeneficiaries = (data || []).filter(b => b.is_active !== false);
-
-      // Transform data - usar bank (nuevo) o bank_platform (legacy)
-      const transformed = activeBeneficiaries.map(b => ({
-        ...b,
-        bank: Array.isArray(b.bank) ? b.bank[0] : b.bank,
-        bank_platform: Array.isArray(b.bank_platform) ? b.bank_platform[0] : b.bank_platform,
-      }));
-
-      setClientBeneficiaries(transformed);
+      const beneficiaries = await clienteService.getClientBeneficiaries(clientId);
+      setClientBeneficiaries(beneficiaries);
     } catch (error) {
       console.error('Error loading beneficiaries:', error);
       if (error && typeof error === 'object') {
