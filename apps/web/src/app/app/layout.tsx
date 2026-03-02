@@ -70,15 +70,23 @@ export default function ClientLayout({
             .eq('id', user.id)
             .single();
           if (data) {
+            // Bloqueo de ROL: El personal administrativo no puede navegar en el area de Clientes
+            if (!['CLIENT', 'AFFILIATE'].includes(data.role)) {
+              router.push('/panel');
+              // No seteamos el perfil ni marcamos false en loading para que se quede en estado "Cargando" mientras redirige
+              return;
+            }
+
             setProfile(data);
 
             // Verificar si el usuario necesita KYC
-            const needsKyc = ['CLIENT', 'AFFILIATE'].includes(data.role) && !data.is_kyc_verified;
+            const needsKyc = !data.is_kyc_verified;
             const isExemptPath = kycExemptPaths.some(path => pathname.startsWith(path));
 
             if (needsKyc && !isExemptPath) {
               router.push('/app/verificar-identidad');
-              return;
+              // No usamos return prematuro aquí para permitir que setIsLoading(false) se ejecute,
+              // de lo contrario el spinner infinito se queda congelado bloqueando interacciones.
             }
           }
         }
@@ -139,8 +147,29 @@ export default function ClientLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#05294F]"></div>
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
+          <p className="text-gray-500 font-medium">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificación de seguridad de renderizado para KYC
+  const needsKyc = profile && !profile.is_kyc_verified;
+  const isExemptPath = kycExemptPaths.some(path => pathname.startsWith(path));
+
+  // Si el usuario necesita KYC y no está en una ruta exenta, aunque cambie la URL manual
+  // esto retornará nulo o el loader mientras router.push hace efecto, bloqueando los children
+  if (needsKyc && !isExemptPath) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent mb-4"></div>
+        <p className="text-gray-500 font-medium text-center px-4">
+          Redirigiendo al área de verificación de identidad...<br />
+          Por seguridad no puedes acceder al sistema hasta completar este paso.
+        </p>
       </div>
     );
   }

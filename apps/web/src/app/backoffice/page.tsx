@@ -92,13 +92,27 @@ function BackofficeLoginForm() {
       }
 
       // Sin 2FA - crear sesión directa con Supabase
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) {
+      if (authError || !authData.user) {
         setError('Error al crear sesión. Intenta de nuevo.');
+        return;
+      }
+
+      // Validar Rol de Usuario Administrativo
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profile && ['CLIENT', 'AFFILIATE'].includes(profile.role)) {
+        await supabase.auth.signOut();
+        setError('Acceso denegado. Portal exclusivo para administración. Utiliza /login');
+        setLoading(false);
         return;
       }
 

@@ -60,21 +60,31 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Obtener el perfil para saber el rol
+        // Obtener el perfil para saber el rol y estado KYC
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, is_kyc_verified')
           .eq('id', data.user.id)
           .single();
 
-        // Redirigir según el rol - Clientes van a /app
+        // Redirigir según el rol y verificación
         router.refresh();
         if (profile) {
-          switch (profile.role) {
-            case 'CLIENT':
-            case 'AFFILIATE':
-            default:
-              router.push('/app');
+          // Si el usuario pertenece a la administración (NO es Cliente ni Afiliado)
+          // tiene ABSOLUTAMENTE prohibido entrar por este login.
+          if (!['CLIENT', 'AFFILIATE'].includes(profile.role)) {
+            await supabase.auth.signOut();
+            setError('Acceso denegado. El personal administrativo debe ingresar por /backoffice');
+            setLoading(false);
+            return;
+          }
+
+          const needsKyc = !profile.is_kyc_verified;
+
+          if (needsKyc) {
+            router.push('/app/verificar-identidad');
+          } else {
+            router.push('/app');
           }
         } else {
           router.push('/app');

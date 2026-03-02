@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
 
@@ -9,38 +9,45 @@ type VerificationStatus = 'loading' | 'success' | 'declined' | 'pending';
 export default function VerificationCallbackPage() {
  const router = useRouter();
  const [status, setStatus] = useState<VerificationStatus>('loading');
+ const [isCheckingManual, setIsCheckingManual] = useState(false);
+ const isSyncingRef = useRef(false);
+
+ const checkStatus = useCallback(async (forceSync: boolean = false) => {
+  // Si ya hay un sync en progreso, no hacer otra petición
+  if (isSyncingRef.current && !forceSync) return false;
+
+  if (forceSync) isSyncingRef.current = true;
+
+  try {
+   const response = await fetch(`/api/kyc/status${forceSync ? '?sync=true' : ''}`);
+   const data = await response.json();
+
+   console.log('[KYC Callback] Respuesta:', data);
+
+   if (data.is_verified) {
+    setStatus('success');
+    setTimeout(() => router.push('/app'), 3000);
+    return true; // Stop polling
+   } else if (data.last_verification?.status === 'declined') {
+    setStatus('declined');
+    return true; // Stop polling
+   }
+
+   return false; // Continue polling
+  } catch (error) {
+   console.error('Error checking status:', error);
+   return false;
+  } finally {
+   if (forceSync) {
+    isSyncingRef.current = false;
+    setIsCheckingManual(false);
+   }
+  }
+ }, [router]);
 
  useEffect(() => {
   let attempts = 0;
   const maxAttempts = 20; // 1 minuto aprox (20 * 3s)
-
-  const checkStatus = async () => {
-   try {
-    const response = await fetch('/api/kyc/status');
-    const data = await response.json();
-
-    if (data.is_verified) {
-     setStatus('success');
-     setTimeout(() => router.push('/app'), 3000);
-     return true; // Stop polling
-    } else if (data.last_verification?.status === 'declined') {
-     setStatus('declined');
-     return true; // Stop polling
-    }
-
-    // Si el query param dice Approved pero la BD aún no, seguimos intentando
-    const searchParams = new URLSearchParams(window.location.search);
-    const urlStatus = searchParams.get('status');
-    if (urlStatus === 'Approved') {
-     // Opcional: Podríamos mostrar un estado "Finalizando..."
-    }
-
-    return false; // Continue polling
-   } catch (error) {
-    console.error('Error checking status:', error);
-    return false;
-   }
-  };
 
   // Verificar inmediatamente
   checkStatus();
@@ -52,14 +59,25 @@ export default function VerificationCallbackPage() {
 
    if (shouldStop || attempts >= maxAttempts) {
     clearInterval(interval);
-    if (attempts >= maxAttempts && status === 'loading') {
+    if (attempts >= maxAttempts) {
      setStatus('pending'); // Fallback a pending si timeout
     }
    }
   }, 3000);
 
   return () => clearInterval(interval);
- }, [router, status]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, []);
+
+ const handleManualSync = useCallback(async () => {
+  setIsCheckingManual(true);
+  setStatus('loading');
+  const result = await checkStatus(true);
+  // Si no se resolvió tras el sync, volver a pending
+  if (!result) {
+   setStatus('pending');
+  }
+ }, [checkStatus]);
 
  return (
   <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
@@ -142,10 +160,11 @@ export default function VerificationCallbackPage() {
         Esto puede tomar unos minutos.
        </p>
        <button
-        onClick={() => window.location.reload()}
-        className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-6 py-3 rounded-xl transition-colors"
+        onClick={handleManualSync}
+        disabled={isCheckingManual}
+        className="inline-flex items-center gap-2 bg-[#05294F] hover:bg-[#063a6b] text-white font-medium px-6 py-3 rounded-xl transition-colors disabled:opacity-50"
        >
-        Verificar estado
+        {isCheckingManual ? 'Sincronizando con Didit...' : 'Verificar estado'}
        </button>
       </>
      )}

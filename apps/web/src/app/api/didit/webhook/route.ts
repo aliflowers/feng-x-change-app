@@ -24,8 +24,16 @@ export async function POST(request: NextRequest) {
                bodyLength: rawBody.length,
           });
 
-          // Verificar firma HMAC
-          const isValid = await verifyWebhookSignature(rawBody, signature, timestamp);
+          // Verificar firma HMAC o Token Interno
+          let isValid = false;
+          const internalSecret = request.headers.get('x-internal-sync-secret');
+
+          if (internalSecret && internalSecret === process.env.SUPABASE_SECRET_KEY) {
+               isValid = true;
+               console.log('[Didit Webhook] Sincronización interna autorizada');
+          } else {
+               isValid = await verifyWebhookSignature(rawBody, signature, timestamp);
+          }
 
           if (!isValid) {
                console.error('[Didit Webhook] Firma inválida');
@@ -143,7 +151,8 @@ export async function POST(request: NextRequest) {
                          .single();
 
                     if (!userProfileError && userProfile) {
-                         const diditFullName = sessionDetails.full_name || '';
+                         // Ocasionalmente Didit V3 empaqueta el nombre extraído bajo id_verifications en lugar del root
+                         const diditFullName = sessionDetails.id_verifications?.[0]?.full_name || sessionDetails.full_name || '';
 
                          // Helper para normalizar: quitar acentos, caracteres especiales, y pasar a minusculas
                          const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
@@ -342,20 +351,22 @@ export async function POST(request: NextRequest) {
                     }
                } else {
                     console.warn('[Didit Webhook] No se pudieron obtener detalles de sesión para kyc:', payload.session_id);
-                    // Fallback: Si no hay detalles, al menos marcar como verificado (ya lo hace arriba el updateProfileData inicial si lo movieramos, pero aqui depende de sessionDetails)
-                    // Mínimo marcar verificado
+                    // IMPORTANTE: NO usamos un fallback permisivo aquí.
+                    // Si no pudimos recuperar sesión y validar el nombre, se marca en revisión o se deja el estado crudo,
+                    // pero JAMÁS se debe asignar `is_kyc_verified: true` a ciegas.
                     const fallbackUpdate: Record<string, any> = {
-                         is_kyc_verified: true,
                          updated_at: new Date().toISOString(),
                     };
 
+                    // Guardamos la data recolectada genérica únicamente
                     if (extractedDocNumber) {
                          fallbackUpdate.document_number = extractedDocNumber;
                          if (updateData.document_type) fallbackUpdate.document_type = updateData.document_type;
                          if (updateData.document_country) fallbackUpdate.country = updateData.document_country;
                     }
-
-                    await supabase.from('profiles').update(fallbackUpdate).eq('id', verification.user_id);
+                    if (Object.keys(fallbackUpdate).length > 1) { // actualizamos si hay algo más que updated_at
+                         await supabase.from('profiles').update(fallbackUpdate).eq('id', verification.user_id);
+                    }
                }
           }
 

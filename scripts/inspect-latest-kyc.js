@@ -3,10 +3,10 @@
 // Ejecutar con: item env:SUPABASE_SERVICE_ROLE_KEY="..." node scripts/inspect-latest-kyc.js
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tu-proyecto.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
 
 if (!SUPABASE_KEY) {
- console.error('Error: Falta SUPABASE_SERVICE_ROLE_KEY');
+ console.error('Error: Falta SUPABASE_SECRET_KEY');
  process.exit(1);
 }
 
