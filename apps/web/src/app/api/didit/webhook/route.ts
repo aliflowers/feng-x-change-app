@@ -77,7 +77,10 @@ export async function POST(request: NextRequest) {
           // DB: 'pending', 'in_progress', 'approved', 'declined', 'expired'
           let dbStatus = payload.status.toLowerCase();
 
-          if (dbStatus === 'not started' || dbStatus === 'created') {
+          // Manejar estados de aprobación manual explícitamente y variaciones
+          if (dbStatus === 'approved' || dbStatus === 'approved_manual') {
+               dbStatus = 'approved';
+          } else if (dbStatus === 'not started' || dbStatus === 'created') {
                dbStatus = 'pending';
           } else if (dbStatus === 'started' || dbStatus === 'submitted' || dbStatus === 'in review') {
                dbStatus = 'in_progress';
@@ -129,6 +132,51 @@ export async function POST(request: NextRequest) {
                const sessionDetails = await getVerificationSession(payload.session_id);
 
                if (sessionDetails) {
+                    // Validar Coincidencia de Nombres
+                    let nameValidationPassed = false;
+                    let declineReasonStr = '';
+
+                    const { data: userProfile, error: userProfileError } = await supabase
+                         .from('profiles')
+                         .select('first_name, last_name')
+                         .eq('id', verification.user_id)
+                         .single();
+
+                    if (!userProfileError && userProfile) {
+                         const diditFullName = sessionDetails.full_name || '';
+
+                         // Helper para normalizar: quitar acentos, caracteres especiales, y pasar a minusculas
+                         const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+                         const dbFirstNames = normalize(userProfile.first_name || '').split(' ').filter(Boolean);
+                         const dbLastNames = normalize(userProfile.last_name || '').split(' ').filter(Boolean);
+                         const diditNames = normalize(diditFullName).split(' ').filter(Boolean);
+
+                         // Regla: Debe coincidir AL MENOS UN nombre Y AL MENOS UN apellido
+                         const hasFirstNameMatch = dbFirstNames.some(name => diditNames.includes(name));
+                         const hasLastNameMatch = dbLastNames.some(name => diditNames.includes(name));
+
+                         if (hasFirstNameMatch && hasLastNameMatch) {
+                              nameValidationPassed = true;
+                         } else {
+                              declineReasonStr = 'El nombre del documento no coincide con el registrado en el sistema.';
+                              console.error(`[Didit Webhook] Name mismatch for user ${verification.user_id}. DB: ${userProfile.first_name} ${userProfile.last_name}, Didit: ${diditFullName}`);
+                         }
+                    } else {
+                         declineReasonStr = 'No se pudo obtener el perfil del usuario para validar el nombre.';
+                         console.error(`[Didit Webhook] No profile found for name validation. User: ${verification.user_id}`);
+                    }
+
+                    // Si no pasó la validación de nombre, rechazar internamente y abortar la actualización de perfil verificada
+                    if (!nameValidationPassed) {
+                         await supabase.from('kyc_verifications').update({
+                              status: 'declined',
+                              decline_reasons: declineReasonStr
+                         }).eq('id', verification.id);
+
+                         return NextResponse.json({ received: true, message: 'name mismatch - verification declined' });
+                    }
+
                     const updateProfileData: Record<string, any> = {
                          is_kyc_verified: true,
                          updated_at: new Date().toISOString(),
