@@ -74,7 +74,7 @@ export default function LoginPage() {
           // tiene ABSOLUTAMENTE prohibido entrar por este login.
           if (!['CLIENT', 'AFFILIATE'].includes(profile.role)) {
             await supabase.auth.signOut();
-            setError('Acceso denegado. El personal administrativo debe ingresar por /backoffice');
+            setError('Acceso denegado. El personal administrativo debe ingresar por el acceso administrativo');
             setLoading(false);
             return;
           }

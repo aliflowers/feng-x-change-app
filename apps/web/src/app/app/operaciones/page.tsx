@@ -510,11 +510,29 @@ export default function OperacionesPage() {
 
       const proofUrl = proofUrls.length > 0 ? proofUrls.join(',') : null;
 
+      // Get the latest transaction number for the current year
+      const currentYear = new Date().getFullYear();
+      const { data: latestTx } = await supabase
+        .from('transactions')
+        .select('transaction_number')
+        .like('transaction_number', `OP-${currentYear}-%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      let lastNumber = 0;
+      if (latestTx && latestTx.length > 0 && latestTx[0].transaction_number) {
+        const parts = latestTx[0].transaction_number.split('-');
+        if (parts.length === 3) {
+          lastNumber = parseInt(parts[2], 10) || 0;
+        }
+      }
+
       // Create transactions for each beneficiary
       const rate = getCurrentRate();
       const transactions = selectedBeneficiaries.map((b, index) => {
-        // Generar un número de transacción único: OP-TIMESTAMP-RANDOM-INDEX
-        const uniqueTxNumber = `OP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${index}`;
+        // Generar un número de transacción secuencial: OP-YYYY-XXXXX
+        const nextNumber = lastNumber + 1 + index;
+        const uniqueTxNumber = `OP-${currentYear}-${String(nextNumber).padStart(5, '0')}`;
 
         return {
           user_id: user.id,
