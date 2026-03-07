@@ -41,6 +41,10 @@ interface UserBankAccount {
   bank_platform_id?: number;
   account_number: string;
   account_holder: string;
+  document_type?: string;
+  document_number?: string;
+  account_type?: string;
+  email?: string;
   bank?: {
     name: string;
     currency_code: string;
@@ -217,6 +221,10 @@ export default function OperacionesPage() {
           bank_platform_id,
           account_number,
           account_holder,
+          document_type,
+          document_number,
+          account_type,
+          email,
           bank:banks (
             name,
             currency_code
@@ -433,6 +441,10 @@ export default function OperacionesPage() {
           bank_platform_id,
           account_number,
           account_holder,
+          document_type,
+          document_number,
+          account_type,
+          email,
           bank:banks (
             name,
             currency_code
@@ -849,26 +861,32 @@ export default function OperacionesPage() {
               <p className="text-sm font-semibold text-gray-700">Distribución por beneficiario:</p>
 
               {/* Amount indicator */}
-              <div className={`p-3 rounded-xl border ${Math.abs(remainingAmount) < 0.01
-                ? 'bg-green-50 border-green-200'
-                : remainingAmount < 0
-                  ? 'bg-red-50 border-red-200'
-                  : 'bg-amber-50 border-amber-200'
+              <div className={`p-3 rounded-xl border ${selectedBeneficiaries.length > 1
+                ? Math.abs(remainingAmount) < 0.01
+                  ? 'bg-green-50 border-green-200'
+                  : remainingAmount < 0
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-amber-50 border-amber-200'
+                : 'bg-gray-50 border-gray-200'
                 }`}>
                 <div className="flex justify-between items-center text-sm">
                   <span>Total a enviar:</span>
-                  <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toFixed(2)}</span>
+                  <span className="font-bold text-lg text-gray-900">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span>Distribuido:</span>
-                  <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {totalAmountToBeneficiaries.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span>Restante:</span>
-                  <span className={`font-bold ${remainingAmount < 0 ? 'text-red-600' : remainingAmount > 0.01 ? 'text-amber-600' : 'text-green-600'}`}>
-                    {getCurrency(fromCurrencyId)?.symbol} {remainingAmount.toFixed(2)}
-                  </span>
-                </div>
+                {selectedBeneficiaries.length > 1 && (
+                  <>
+                    <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-gray-200/50">
+                      <span>Distribuido:</span>
+                      <span className="font-bold">{getCurrency(fromCurrencyId)?.symbol} {totalAmountToBeneficiaries.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm mt-1">
+                      <span>Restante:</span>
+                      <span className={`font-bold ${remainingAmount < 0 ? 'text-red-600' : remainingAmount > 0.01 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {getCurrency(fromCurrencyId)?.symbol} {remainingAmount.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {selectedBeneficiaries.map((b, index) => {
@@ -881,9 +899,49 @@ export default function OperacionesPage() {
                         Beneficiario {index + 1}
                       </span>
                     </div>
-                    <p className="font-bold text-gray-900">{account.account_holder}</p>
-                    <p className="text-sm text-gray-600">{account.bank_platform?.name}</p>
-                    <p className="text-sm text-gray-500 font-mono">{account.account_number}</p>
+                    <p className="font-bold text-gray-900 text-lg mb-3">{account.account_holder}</p>
+
+                    <div className="bg-white/60 rounded-lg p-3 space-y-2 border border-blue-100">
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4">
+                        <div className="flex-1">
+                          <span className="text-xs text-gray-500 block leading-tight mb-0.5">Banco / Plataforma</span>
+                          <span className="text-sm font-medium text-gray-800">{account.bank_platform?.name || account.bank?.name}</span>
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-xs text-gray-500 block leading-tight mb-0.5">Cuenta / Identificador</span>
+                          <span className="text-sm font-mono text-gray-800 break-all">{account.account_number}</span>
+                        </div>
+                      </div>
+
+                      {(account.document_type || account.document_number) && (
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 pt-2 border-t border-blue-100/50">
+                          <div className="flex-1">
+                            <span className="text-xs text-gray-500 block leading-tight mb-0.5">Documento</span>
+                            <span className="text-sm font-medium text-gray-800">
+                              {(() => {
+                                const type = account.document_type;
+                                const num = account.document_number;
+                                if (!type && !num) return '';
+                                if (!type) return num;
+                                if (!num) return type;
+                                if (type.startsWith('CI-')) return `C.I: ${type.split('-')[1]}-${num}`;
+                                if (type.startsWith('RIF-')) return `RIF: ${type.split('-')[1]}-${num}`;
+                                return `${type}-${num}`;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {account.email && (
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4 pt-2 border-t border-blue-100/50">
+                          <div className="flex-1">
+                            <span className="text-xs text-gray-500 block leading-tight mb-0.5">Correo Electrónico</span>
+                            <span className="text-sm font-medium text-gray-800 truncate">{account.email}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Editable amount input - only show if multiple beneficiaries */}
                     {selectedBeneficiaries.length > 1 ? (
