@@ -331,7 +331,12 @@ export default function OperacionesPage() {
   // Current currency code and country
   const toCurrencyCode = getCurrency(toCurrencyId)?.code || '';
   const toCountryCode = currencyToCountryMap[toCurrencyCode] || 'VE';
-  const documentTypesForCurrency = documentTypesByCountry[toCountryCode] || [];
+  const rawDocumentTypes = documentTypesByCountry[toCountryCode] || [];
+
+  // Excluir RIF y Pasaporte para VES
+  const documentTypesForCurrency = toCurrencyCode === 'VES'
+    ? rawDocumentTypes.filter(doc => !doc.value.startsWith('RIF') && !doc.label.toLowerCase().includes('pasaporte'))
+    : rawDocumentTypes;
 
   // Banks available for the selected destination currency
   const availableBanks = banks.filter(b => b.currency_code === toCurrencyCode);
@@ -397,9 +402,14 @@ export default function OperacionesPage() {
         .from('user_bank_accounts')
         .select(`
           id,
+          bank_id,
           bank_platform_id,
           account_number,
           account_holder,
+          bank:banks (
+            name,
+            currency_code
+          ),
           bank_platform:banks_platforms (
             name,
             currency_id
@@ -1113,9 +1123,18 @@ export default function OperacionesPage() {
                   <input
                     type="text"
                     value={newBeneficiaryForm.account_number}
-                    onChange={(e) => setNewBeneficiaryForm(prev => ({ ...prev, account_number: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      if (toCurrencyCode === 'VES' && value.length > 20) return;
+                      setNewBeneficiaryForm(prev => ({ ...prev, account_number: value }));
+                    }}
                     className="input w-full font-mono"
-                    placeholder={toCurrencyCode === 'VES' ? '01020000000000000000' : 'Número de cuenta'}
+                    placeholder={
+                      toCurrencyCode === 'VES'
+                        ? (selectedBankForModal?.code ? `${selectedBankForModal.code}${'0'.repeat(16)}` : '01020000000000000000')
+                        : 'Número de cuenta'
+                    }
+                    maxLength={toCurrencyCode === 'VES' ? 20 : undefined}
                     required
                   />
                   {toCurrencyCode === 'VES' && <p className="text-xs text-gray-400">20 dígitos. Los primeros 4 son el código del banco.</p>}
