@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
    if (resetError) {
     setError(resetError.message);
    } else {
-    setMessage('Te hemos enviado un correo con instrucciones para recuperar tu contraseña.');
+    setMessage('Si el correo existe, recibirás un enlace para reestablecer tu contraseña.');
     setEmail('');
    }
   } catch (err) {
