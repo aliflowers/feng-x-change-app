@@ -512,17 +512,23 @@ export default function OperacionesPage() {
 
       // Create transactions for each beneficiary
       const rate = getCurrentRate();
-      const transactions = selectedBeneficiaries.map(b => ({
-        user_id: user.id,
-        from_currency_id: fromCurrencyId,
-        to_currency_id: toCurrencyId,
-        amount_sent: b.amountToSend,
-        exchange_rate_applied: rate,
-        amount_received: b.amountToSend * rate,
-        user_bank_account_id: b.accountId,
-        client_proof_url: proofUrl,
-        status: 'POOL'
-      }));
+      const transactions = selectedBeneficiaries.map((b, index) => {
+        // Generar un número de transacción único: OP-TIMESTAMP-RANDOM-INDEX
+        const uniqueTxNumber = `OP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${index}`;
+
+        return {
+          user_id: user.id,
+          from_currency_id: fromCurrencyId,
+          to_currency_id: toCurrencyId,
+          amount_sent: b.amountToSend,
+          exchange_rate_applied: rate,
+          amount_received: b.amountToSend * rate,
+          user_bank_account_id: b.accountId,
+          client_proof_url: proofUrl,
+          status: 'POOL',
+          transaction_number: uniqueTxNumber
+        };
+      });
 
       const { error: txError } = await supabase
         .from('transactions')
