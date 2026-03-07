@@ -207,11 +207,19 @@ export default function BeneficiariesPage() {
                       }`}>
                       <Building2 size={28} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <h4 className="text-lg font-bold text-gray-900 leading-tight">{bankName}</h4>
-                      <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                        {currencyCode}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                          {currencyCode}
+                        </span>
+                        <Link
+                          href={`/app/operaciones?beneficiaryId=${acc.id}`}
+                          className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm transition-colors"
+                        >
+                          Enviar
+                        </Link>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -308,6 +316,13 @@ export default function BeneficiariesPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/app/operaciones?beneficiaryId=${acc.id}`}
+                            className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+                            title="Enviar"
+                          >
+                            Enviar
+                          </Link>
                           <Link
                             href={`/app/beneficiarios/${acc.id}`}
                             className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition-colors"

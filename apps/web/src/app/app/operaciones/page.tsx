@@ -135,10 +135,37 @@ export default function OperacionesPage() {
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserBankAccount[]>([]);
 
+  // Pre-selected beneficiary from URL
+  const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setPreselectedBeneficiaryId(params.get('beneficiaryId'));
+    }
+  }, []);
+
   // Form state
   const [fromCurrencyId, setFromCurrencyId] = useState<number>(1); // USD por defecto
   const [toCurrencyId, setToCurrencyId] = useState<number>(2); // VES por defecto
   const [amountSent, setAmountSent] = useState<string>('');
+
+  // Set toCurrency based on preselected beneficiary
+  useEffect(() => {
+    if (preselectedBeneficiaryId && userAccounts.length > 0 && currencies.length > 0) {
+      const account = userAccounts.find(acc => acc.id === preselectedBeneficiaryId);
+      if (account) {
+        const currencyCode = account.bank?.currency_code;
+        const currencyId = account.bank_platform?.currency_id;
+        if (currencyCode) {
+          const c = currencies.find(c => c.code === currencyCode);
+          if (c && c.id !== toCurrencyId) setToCurrencyId(c.id);
+        } else if (currencyId && currencyId !== toCurrencyId) {
+          setToCurrencyId(currencyId);
+        }
+      }
+    }
+  }, [preselectedBeneficiaryId, userAccounts, currencies, toCurrencyId]);
 
   // Multiple beneficiaries
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState<SelectedBeneficiary[]>([]);
@@ -511,6 +538,18 @@ export default function OperacionesPage() {
       setError('Ingresa un monto válido');
       return;
     }
+
+    // Auto-skip logic for preselected beneficiary
+    if (currentStep === 1 && preselectedBeneficiaryId) {
+      const account = userAccounts.find(acc => acc.id === preselectedBeneficiaryId);
+      if (account) {
+        setSelectedBeneficiaries([{ accountId: preselectedBeneficiaryId, amountToSend: parseFloat(amountSent) }]);
+        setCurrentStep(3);
+        setError(null);
+        return;
+      }
+    }
+
     if (currentStep === 2) {
       if (selectedBeneficiaries.length === 0) {
         setError('Selecciona al menos un beneficiario');
@@ -528,7 +567,11 @@ export default function OperacionesPage() {
 
   const prevStep = () => {
     setError(null);
-    setCurrentStep(prev => Math.max(prev - 1, 1));
+    if (currentStep === 3 && preselectedBeneficiaryId) {
+      setCurrentStep(1);
+    } else {
+      setCurrentStep(prev => Math.max(prev - 1, 1));
+    }
   };
 
   if (loading) {
@@ -656,7 +699,8 @@ export default function OperacionesPage() {
                   setToCurrencyId(parseInt(e.target.value));
                   setSelectedBeneficiaries([]);
                 }}
-                className="input"
+                className={`input ${preselectedBeneficiaryId ? 'bg-gray-100 cursor-not-allowed opacity-70' : ''}`}
+                disabled={!!preselectedBeneficiaryId}
               >
                 {availableToCurrencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
