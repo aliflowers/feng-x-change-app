@@ -14,6 +14,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import ClientSessionManager from '@/components/ClientSessionManager';
 
 interface UserProfile {
   first_name: string;
@@ -176,6 +177,7 @@ export default function ClientLayout({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 pb-20 md:pb-0">
+      <ClientSessionManager />
       {/* Header - Desktop con navegación, Móvil simplificado */}
       <header className="bg-gradient-to-r from-[#05294F] to-[#07478F] shadow-lg sticky top-0 z-50">
         <div className="container-app flex items-center justify-between h-14 md:h-16">
