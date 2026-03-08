@@ -488,6 +488,21 @@ export default function TomadasPage() {
                   {copiedField === 'amount' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-emerald-600" />}
                 </button>
               </div>
+
+              {/* Copy All Button */}
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    const acc = selectedOperation.user_bank_account;
+                    const textToCopy = `Beneficiario: ${acc?.account_holder || 'N/A'}\nDocumento: ${acc?.document_type || ''}-${acc?.document_number || 'N/A'}\nBanco: ${acc?.bank?.name || 'N/A'}\nNúmero de Cuenta: ${acc?.account_number || 'N/A'}\nMonto a Pagar: ${selectedOperation.to_currency.symbol}${selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${selectedOperation.to_currency.code}`;
+                    copyToClipboard(textToCopy, 'all');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-colors font-medium border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                >
+                  {copiedField === 'all' ? <Check size={18} /> : <Copy size={18} />}
+                  {copiedField === 'all' ? '¡Datos copiados!' : 'Copiar todos los datos'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

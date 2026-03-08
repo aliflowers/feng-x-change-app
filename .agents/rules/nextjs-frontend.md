@@ -1,5 +1,6 @@
 ---
-trigger: always_on
+trigger: model_decision
+description: Guía técnica para el desarrollo con App Router, Server Components y optimización para Turbopack.
 ---
 
 # Estándares Next.js App Router (v14+)
