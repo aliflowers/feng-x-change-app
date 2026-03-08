@@ -357,6 +357,7 @@ export default function PanelDashboard() {
 
               {/* Delayed Payments */}
               <div className="space-y-3">
+                {/* Delayed Payments */}
                 {delayedPayments.length > 0 ? (
                   <>
                     <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
@@ -381,6 +382,19 @@ export default function PanelDashboard() {
                   <div className="flex items-center gap-2 text-emerald-400 text-sm">
                     <CheckCircle2 size={16} />
                     <span>Sin pagos demorados</span>
+                  </div>
+                )}
+
+                {/* Unverified Operations Alert */}
+                {metrics.poolCount > 0 ? (
+                  <div className="flex items-center gap-2 text-amber-400 text-sm font-medium mt-3 border-t border-white/10 pt-3">
+                    <AlertCircle size={16} />
+                    <span>Tienes {metrics.poolCount} operaciones sin verificar</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-emerald-400 text-sm mt-3 border-t border-white/10 pt-3">
+                    <CheckCircle2 size={16} />
+                    <span>Sin operaciones por verificar</span>
                   </div>
                 )}
               </div>
