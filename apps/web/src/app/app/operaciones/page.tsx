@@ -161,6 +161,14 @@ export default function OperacionesPage() {
   const [paypalInvoiceSent, setPaypalInvoiceSent] = useState(false);
   const [paypalInvoiceId, setPaypalInvoiceId] = useState<string | null>(null);
   const [paypalInvoiceError, setPaypalInvoiceError] = useState<string | null>(null);
+  const [paypalPaymentConfirmed, setPaypalPaymentConfirmed] = useState(false);
+  const [checkingPaypalPayment, setCheckingPaypalPayment] = useState(false);
+  const [showPaypalConfirmModal, setShowPaypalConfirmModal] = useState(false);
+  const [paypalTransactionData, setPaypalTransactionData] = useState<{
+    transactionId: string | null;
+    paymentDate: string | null;
+    reference: string | null;
+  } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -177,6 +185,37 @@ export default function OperacionesPage() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownOpen]);
+
+  // PayPal payment polling - checks invoice status every 10s after sending
+  useEffect(() => {
+    if (!paypalInvoiceSent || !paypalInvoiceId || paypalPaymentConfirmed) return;
+
+    setCheckingPaypalPayment(true);
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/paypal/check-invoice-status?invoiceId=${paypalInvoiceId}`);
+        const data = await res.json();
+        if (data.status === 'PAID' || data.status === 'MARKED_AS_PAID') {
+          setPaypalPaymentConfirmed(true);
+          setCheckingPaypalPayment(false);
+          setShowPaypalConfirmModal(true);
+          setPaypalTransactionData({
+            transactionId: data.transactionId || null,
+            paymentDate: data.paymentDate || null,
+            reference: data.reference || null,
+          });
+          clearInterval(intervalId);
+        }
+      } catch (err) {
+        console.error('[PayPal Polling] Error checking status:', err);
+      }
+    }, 10000); // Every 10 seconds
+
+    return () => {
+      clearInterval(intervalId);
+      setCheckingPaypalPayment(false);
+    };
+  }, [paypalInvoiceSent, paypalInvoiceId, paypalPaymentConfirmed]);
 
   // Pre-selected beneficiary from URL
   const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(null);
@@ -518,14 +557,25 @@ export default function OperacionesPage() {
 
   // Submit transaction(s)
   const handleSubmit = async () => {
-    if (selectedBeneficiaries.length === 0 || proofFiles.length === 0) {
-      setError('Por favor selecciona al menos un beneficiario y sube el comprobante de pago');
-      return;
+    // Determine if PayPal flow
+    const paypalAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+    const isPaypalFlow = paypalAccount?.name.toLowerCase().includes('paypal');
+
+    // For PayPal: require confirmed payment, no proof files needed
+    // For other methods: require proof files
+    if (isPaypalFlow) {
+      if (selectedBeneficiaries.length === 0 || !paypalPaymentConfirmed) {
+        setError('Por favor selecciona al menos un beneficiario y espera la confirmación de pago de PayPal');
+        return;
+      }
+    } else {
+      if (selectedBeneficiaries.length === 0 || proofFiles.length === 0) {
+        setError('Por favor selecciona al menos un beneficiario y sube el comprobante de pago');
+        return;
+      }
     }
 
     // Validate PayPal email if PayPal is selected
-    const paypalAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
-    const isPaypalFlow = paypalAccount?.name.toLowerCase().includes('paypal');
     if (isPaypalFlow) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!paypalEmail || !emailRegex.test(paypalEmail)) {
@@ -548,25 +598,30 @@ export default function OperacionesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
 
-      // Upload all proof files
-      const proofUrls: string[] = [];
-      for (const file of proofFiles) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      // Upload proof files (only for non-PayPal flows)
+      let proofUrl: string | null = null;
+      if (isPaypalFlow) {
+        // PayPal verified - no upload needed
+        proofUrl = `PAYPAL_VERIFIED|INVOICE:${paypalInvoiceId}`;
+      } else {
+        const proofUrls: string[] = [];
+        for (const file of proofFiles) {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('client-proofs')
-          .upload(fileName, file);
-
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from('client-proofs')
-            .getPublicUrl(fileName);
-          proofUrls.push(publicUrl);
-        }
-      }
+            .upload(fileName, file);
 
-      const proofUrl = proofUrls.length > 0 ? proofUrls.join(',') : null;
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('client-proofs')
+              .getPublicUrl(fileName);
+            proofUrls.push(publicUrl);
+          }
+        }
+        proofUrl = proofUrls.length > 0 ? proofUrls.join(',') : null;
+      }
 
       // Get the latest transaction number for the current year
       const currentYear = new Date().getFullYear();
@@ -574,7 +629,7 @@ export default function OperacionesPage() {
         .from('transactions')
         .select('transaction_number')
         .like('transaction_number', `OP-${currentYear}-%`)
-        .order('created_at', { ascending: false })
+        .order('transaction_number', { ascending: false })
         .limit(1);
 
       let lastNumber = 0;
@@ -606,8 +661,8 @@ export default function OperacionesPage() {
           user_bank_account_id: b.accountId,
           client_proof_url: proofUrl,
           bank_platform_id: selectedCompanyAccountId,
-          admin_notes: isPaypal ? `PAYPAL_EMAIL: ${paypalEmail} | INVOICE_ID: ${paypalInvoiceId || 'N/A'}` : null,
-          status: 'POOL',
+          admin_notes: isPaypal ? `PAYPAL_EMAIL: ${paypalEmail} | INVOICE_ID: ${paypalInvoiceId || 'N/A'} | TRANSACTION_ID: ${paypalTransactionData?.transactionId || 'N/A'} | PAYMENT_DATE: ${paypalTransactionData?.paymentDate || 'N/A'} | REFERENCE: ${paypalTransactionData?.reference || 'N/A'} | PAYMENT_VERIFIED: YES` : null,
+          status: isPaypal ? 'VERIFIED' : 'POOL',
           transaction_number: uniqueTxNumber
         };
       });
@@ -1442,12 +1497,22 @@ export default function OperacionesPage() {
                                 </>
                               )}
                             </button>
-                          ) : (
+                          ) : paypalPaymentConfirmed ? (
                             <div className="mt-3 flex items-center gap-2 py-2.5 px-4 rounded-lg bg-green-500/20 border border-green-400/30">
                               <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
                               <p className="text-xs text-green-300">
-                                Solicitud enviada a <strong className="text-green-200">{paypalEmail}</strong>. Revisa tu correo, paga y sube el comprobante.
+                                <strong className="text-green-200">¡Pago confirmado!</strong> Tu pago ha sido verificado por PayPal.
                               </p>
+                            </div>
+                          ) : (
+                            <div className="mt-3 space-y-2">
+                              <div className="flex items-center gap-2 py-2.5 px-4 rounded-lg bg-blue-500/20 border border-blue-400/30">
+                                <Loader2 size={16} className="text-blue-400 flex-shrink-0 animate-spin" />
+                                <p className="text-xs text-blue-300">
+                                  Solicitud enviada a <strong className="text-blue-200">{paypalEmail}</strong>. Esperando confirmación de pago...
+                                </p>
+                              </div>
+                              <p className="text-[10px] text-white/40 text-center">Verificando automáticamente cada 10 segundos</p>
                             </div>
                           )}
 
@@ -1465,16 +1530,16 @@ export default function OperacionesPage() {
                           <p className="text-xs font-semibold text-white/70 mb-2">Proceso:</p>
                           <div className="space-y-2">
                             <div className="flex items-start gap-2">
-                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">1</span>
-                              <p className="text-xs text-white/60">Recibirás una solicitud de pago en tu correo de PayPal</p>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${paypalInvoiceSent ? 'bg-green-400/30 text-green-300' : 'bg-yellow-400/20 text-yellow-300'}`}>1</span>
+                              <p className={`text-xs ${paypalInvoiceSent ? 'text-green-300/60 line-through' : 'text-white/60'}`}>Recibirás una solicitud de pago en tu correo de PayPal</p>
                             </div>
                             <div className="flex items-start gap-2">
-                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">2</span>
-                              <p className="text-xs text-white/60">Paga la solicitud desde tu cuenta PayPal</p>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${paypalPaymentConfirmed ? 'bg-green-400/30 text-green-300' : checkingPaypalPayment ? 'bg-blue-400/20 text-blue-300' : 'bg-yellow-400/20 text-yellow-300'}`}>2</span>
+                              <p className={`text-xs ${paypalPaymentConfirmed ? 'text-green-300/60 line-through' : 'text-white/60'}`}>Paga la solicitud desde tu cuenta PayPal</p>
                             </div>
                             <div className="flex items-start gap-2">
-                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">3</span>
-                              <p className="text-xs text-white/60">Sube la captura de pantalla del pago como comprobante más abajo</p>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${paypalPaymentConfirmed ? 'bg-green-400/30 text-green-300' : 'bg-yellow-400/20 text-yellow-300'}`}>3</span>
+                              <p className={`text-xs ${paypalPaymentConfirmed ? 'text-green-300/60 line-through' : 'text-white/60'}`}>Tu pago será verificado automáticamente</p>
                             </div>
                           </div>
                         </div>
@@ -1483,7 +1548,9 @@ export default function OperacionesPage() {
                         <div className="border-t border-orange-500/30 pt-3 flex items-start gap-2">
                           <AlertTriangle size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-orange-300/80">
-                            Revisa tu bandeja de entrada y spam después de solicitar el pago.
+                            {paypalInvoiceSent && !paypalPaymentConfirmed
+                              ? 'No cierres esta ventana mientras se verifica tu pago.'
+                              : 'Revisa tu bandeja de entrada y spam después de solicitar el pago.'}
                           </p>
                         </div>
                       </div>
@@ -1601,61 +1668,66 @@ export default function OperacionesPage() {
               })()}
             </div>
 
-            {/* Proof Upload - Multiple images */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Upload size={18} className="text-gray-500" />
-                <label className="text-sm font-semibold text-gray-700">
-                  Comprobantes de Pago *
-                </label>
-              </div>
-              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <Info size={16} className="text-amber-600 flex-shrink-0" />
-                <p className="text-xs text-amber-700">
-                  Sube capturas de pantalla o fotos de tus comprobantes de depósito.
-                </p>
-              </div>
+            {/* Proof Upload - Only for non-PayPal flows */}
+            {!(() => {
+              const selectedAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+              return selectedAccount?.name.toLowerCase().includes('paypal');
+            })() && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Upload size={18} className="text-gray-500" />
+                    <label className="text-sm font-semibold text-gray-700">
+                      Comprobantes de Pago *
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <Info size={16} className="text-amber-600 flex-shrink-0" />
+                    <p className="text-xs text-amber-700">
+                      Sube capturas de pantalla o fotos de tus comprobantes de depósito.
+                    </p>
+                  </div>
 
-              {/* Uploaded images gallery */}
-              {proofPreviews.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {proofPreviews.map((preview, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={preview}
-                        alt={`Comprobante ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeProofFile(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                      >
-                        <X size={14} />
-                      </button>
+                  {/* Uploaded images gallery */}
+                  {proofPreviews.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {proofPreviews.map((preview, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={preview}
+                            alt={`Comprobante ${index + 1}`}
+                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeProofFile(index)}
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {/* Upload button */}
+                  <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${proofFiles.length > 0 ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
+                    }`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleProofChange}
+                      className="hidden"
+                    />
+                    <Upload className="mx-auto text-gray-400 mb-2" size={32} />
+                    <p className="text-sm text-gray-500">
+                      {proofFiles.length > 0
+                        ? `${proofFiles.length} imagen(es) seleccionada(s) - Haz clic para agregar más`
+                        : 'Haz clic o arrastra imágenes'}
+                    </p>
+                  </label>
                 </div>
               )}
-
-              {/* Upload button */}
-              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${proofFiles.length > 0 ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
-                }`}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleProofChange}
-                  className="hidden"
-                />
-                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                <p className="text-sm text-gray-500">
-                  {proofFiles.length > 0
-                    ? `${proofFiles.length} imagen(es) seleccionada(s) - Haz clic para agregar más`
-                    : 'Haz clic o arrastra imágenes'}
-                </p>
-              </label>
-            </div>
 
             {/* Error Message - at the bottom */}
             {error && (
@@ -1693,12 +1765,13 @@ export default function OperacionesPage() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={submitting || proofFiles.length === 0 || (() => {
+              disabled={submitting || (() => {
                 const pa = companyAccounts.find(a => a.id === selectedCompanyAccountId);
-                if (pa?.name.toLowerCase().includes('paypal')) {
-                  return !paypalInvoiceSent;
+                const isPaypal = pa?.name.toLowerCase().includes('paypal');
+                if (isPaypal) {
+                  return !paypalPaymentConfirmed;
                 }
-                return false;
+                return proofFiles.length === 0;
               })()}
               className="btn-primary flex items-center gap-2"
             >
@@ -1717,6 +1790,34 @@ export default function OperacionesPage() {
           )}
         </div>
       </div>
+
+      {/* PayPal Payment Confirmed Modal */}
+      {showPaypalConfirmModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center animate-in fade-in zoom-in-95 duration-300">
+            {/* Animated check icon */}
+            <div className="mx-auto w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-5">
+              <CheckCircle size={48} className="text-green-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              ¡Pago confirmado exitosamente!
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Tu pago ha sido verificado por PayPal. Haz clic en el botón para crear tu operación.
+            </p>
+            <button
+              onClick={() => {
+                setShowPaypalConfirmModal(false);
+                handleSubmit();
+              }}
+              className="w-full py-3 px-6 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-green-500/25"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Beneficiary Modal */}
       {showAddModal && (

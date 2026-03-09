@@ -689,71 +689,167 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
               </button>
             </div>
             <div className="p-4 overflow-y-auto max-h-[70vh]">
-              {/* Operation Summary + OCR Data Combined */}
+              {/* Operation Summary */}
               {(() => {
+                const isPaypalVerified = selectedOperation.client_proof_url?.startsWith('PAYPAL_VERIFIED');
                 const ocrData = parseOcrData(selectedOperation.admin_notes);
+
+                // Parse PayPal data from admin_notes
+                const paypalData = (() => {
+                  if (!isPaypalVerified || !selectedOperation.admin_notes) return null;
+                  const notes = selectedOperation.admin_notes;
+                  const emailMatch = notes.match(/PAYPAL_EMAIL:\s*([^\s|]+)/);
+                  const invoiceMatch = notes.match(/INVOICE_ID:\s*([^\s|]+)/);
+                  const txIdMatch = notes.match(/TRANSACTION_ID:\s*([^\s|]+)/);
+                  const payDateMatch = notes.match(/PAYMENT_DATE:\s*([^\s|]+)/);
+                  const refMatch = notes.match(/REFERENCE:\s*([^\s|]+)/);
+                  return {
+                    email: emailMatch?.[1] || 'N/A',
+                    invoiceId: invoiceMatch?.[1] || 'N/A',
+                    transactionId: txIdMatch?.[1] || null,
+                    paymentDate: payDateMatch?.[1] || null,
+                    reference: refMatch?.[1] || null,
+                  };
+                })();
+
                 return (
-                  <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-slate-500">Operación:</span>
-                        <span className="font-bold ml-2">{selectedOperation.transaction_number}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Cliente:</span>
-                        <span className="font-medium ml-2">{selectedOperation.user?.first_name} {selectedOperation.user?.last_name}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Envía:</span>
-                        <span className="font-bold ml-2">{selectedOperation.from_currency?.symbol}{selectedOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.from_currency?.code}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Recibe:</span>
-                        <span className="font-bold text-emerald-600 ml-2">{selectedOperation.to_currency?.symbol}{selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.to_currency?.code}</span>
-                      </div>
-                      {/* OCR Data in same grid */}
-                      {ocrData?.reference && (
+                  <>
+                    <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="text-slate-500">Referencia:</span>
-                          <span className="font-mono font-bold ml-2">{ocrData.reference}</span>
+                          <span className="text-slate-500">Operación:</span>
+                          <span className="font-bold ml-2">{selectedOperation.transaction_number}</span>
                         </div>
-                      )}
-                      {ocrData?.date && (
                         <div>
-                          <span className="text-slate-500">Fecha:</span>
-                          <span className="font-medium ml-2">{ocrData.date}</span>
+                          <span className="text-slate-500">Cliente:</span>
+                          <span className="font-medium ml-2">{selectedOperation.user?.first_name} {selectedOperation.user?.last_name}</span>
                         </div>
-                      )}
-                      {ocrData?.bank && (
                         <div>
-                          <span className="text-slate-500">Banco:</span>
-                          <span className="font-medium ml-2">{ocrData.bank}</span>
+                          <span className="text-slate-500">Envía:</span>
+                          <span className="font-bold ml-2">{selectedOperation.from_currency?.symbol}{selectedOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.from_currency?.code}</span>
                         </div>
-                      )}
+                        <div>
+                          <span className="text-slate-500">Recibe:</span>
+                          <span className="font-bold text-emerald-600 ml-2">{selectedOperation.to_currency?.symbol}{selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.to_currency?.code}</span>
+                        </div>
+                        {/* OCR Data for non-PayPal */}
+                        {!isPaypalVerified && ocrData?.reference && (
+                          <div>
+                            <span className="text-slate-500">Referencia:</span>
+                            <span className="font-mono font-bold ml-2">{ocrData.reference}</span>
+                          </div>
+                        )}
+                        {!isPaypalVerified && ocrData?.date && (
+                          <div>
+                            <span className="text-slate-500">Fecha:</span>
+                            <span className="font-medium ml-2">{ocrData.date}</span>
+                          </div>
+                        )}
+                        {!isPaypalVerified && ocrData?.bank && (
+                          <div>
+                            <span className="text-slate-500">Banco:</span>
+                            <span className="font-medium ml-2">{ocrData.bank}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+
+                    {/* PayPal Verified Info */}
+                    {isPaypalVerified && paypalData && (
+                      <div className="mb-4 space-y-3">
+                        {/* PayPal Badge */}
+                        <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <ShieldCheck size={24} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-blue-800">Pago verificado por PayPal</p>
+                            <p className="text-xs text-blue-600">Esta transacción fue confirmada automáticamente por el sistema de facturación de PayPal.</p>
+                          </div>
+                        </div>
+
+                        {/* PayPal Transaction Details */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl divide-y divide-slate-200">
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Método de pago</span>
+                            <span className="text-sm font-bold text-blue-700">PayPal Invoice</span>
+                          </div>
+                          {paypalData.transactionId && paypalData.transactionId !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-slate-500">ID de transacción</span>
+                              <span className="text-sm font-mono font-bold text-slate-800">{paypalData.transactionId}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">N.° de factura</span>
+                            <span className="text-sm font-mono font-bold text-slate-800">{paypalData.invoiceId}</span>
+                          </div>
+                          {paypalData.reference && paypalData.reference !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-slate-500">Formato de pago n.°</span>
+                              <span className="text-sm font-mono font-bold text-slate-800">{paypalData.reference}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Correo del cliente</span>
+                            <span className="text-sm font-medium text-slate-800">{paypalData.email}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Fecha de pago</span>
+                            <span className="text-sm font-medium text-slate-800">
+                              {paypalData.paymentDate && paypalData.paymentDate !== 'N/A'
+                                ? new Date(paypalData.paymentDate).toLocaleDateString('es-VE', {
+                                  day: '2-digit',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })
+                                : new Date(selectedOperation.created_at).toLocaleDateString('es-VE', {
+                                  day: '2-digit',
+                                  month: 'long',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              }
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Estado del pago</span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full">
+                              <CheckCircle2 size={14} />
+                              Pagado
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 );
               })()}
 
-              {/* Proof Image */}
-              {selectedOperation.client_proof_url?.split(',').map((url, index) => (
-                <div key={index} className="mb-4">
-                  <img
-                    src={url.trim()}
-                    alt={`Comprobante ${index + 1}`}
-                    className="w-full rounded-lg border border-slate-200"
-                  />
-                </div>
-              ))}
-              <a
-                href={selectedOperation.client_proof_url?.split(',')[0]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              >
-                <ExternalLink size={18} />
-                Abrir en nueva pestaña
-              </a>
+              {/* Proof Image - Only for non-PayPal */}
+              {!selectedOperation.client_proof_url?.startsWith('PAYPAL_VERIFIED') && (
+                <>
+                  {selectedOperation.client_proof_url?.split(',').map((url, index) => (
+                    <div key={index} className="mb-4">
+                      <img
+                        src={url.trim()}
+                        alt={`Comprobante ${index + 1}`}
+                        className="w-full rounded-lg border border-slate-200"
+                      />
+                    </div>
+                  ))}
+                  <a
+                    href={selectedOperation.client_proof_url?.split(',')[0]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  >
+                    <ExternalLink size={18} />
+                    Abrir en nueva pestaña
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
