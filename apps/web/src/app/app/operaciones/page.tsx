@@ -136,6 +136,25 @@ const venezuelanBanks = [
   { code: '0191', name: 'Banco Nacional de Crédito (BNC)' },
 ];
 
+// Monedas que son realmente plataformas de pago (no deben aparecer en el selector de moneda origen)
+const PLATFORM_CURRENCY_CODES = ['PAYPAL', 'ZINLI', 'USDT'];
+
+// Comisiones PayPal estándar
+const PAYPAL_FEE_PERCENTAGE = 0.054; // 5.4%
+const PAYPAL_FIXED_FEE = 0.30;      // $0.30 USD
+
+// Calcular: "Envío X bruto" → "Recibo Y neto"
+const calcPaypalNet = (gross: number): number => {
+  if (gross <= 0) return 0;
+  return gross - (gross * PAYPAL_FEE_PERCENTAGE + PAYPAL_FIXED_FEE);
+};
+
+// Calcular: "Quiero recibir Y neto" → "Debo enviar X bruto"
+const calcPaypalGross = (net: number): number => {
+  if (net <= 0) return 0;
+  return (net + PAYPAL_FIXED_FEE) / (1 - PAYPAL_FEE_PERCENTAGE);
+};
+
 const steps = [
   { id: 1, name: 'Calculadora', icon: Calculator },
   { id: 2, name: 'Beneficiarios', icon: Users },
@@ -172,6 +191,10 @@ export default function OperacionesPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // PayPal commission calculator states
+  const [paypalCalcMode, setPaypalCalcMode] = useState<'send' | 'receive'>('send');
+  const [paypalReceiveAmount, setPaypalReceiveAmount] = useState<string>('');
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -342,8 +365,10 @@ export default function OperacionesPage() {
   };
 
   // Filtrar monedas de origen disponibles (solo las que tienen tasas activas configuradas como origen)
+  // Excluir monedas que son realmente plataformas (PayPal, Zinli, USDT)
   const availableFromCurrencies = currencies.filter(c =>
-    exchangeRates.some(r => r.from_currency_id === c.id)
+    exchangeRates.some(r => r.from_currency_id === c.id) &&
+    !PLATFORM_CURRENCY_CODES.includes(c.code.toUpperCase())
   );
 
   // Filtrar monedas de destino disponibles (basado en el origen seleccionado)
@@ -738,6 +763,21 @@ export default function OperacionesPage() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  // Detectar si PayPal está seleccionado como plataforma
+  const selectedPlatform = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+  const isPaypalSelected = selectedPlatform?.name.toLowerCase().includes('paypal') ?? false;
+
+  // Cálculos de comisión PayPal derivados
+  const paypalGrossAmount = paypalCalcMode === 'send'
+    ? parseFloat(amountSent || '0')
+    : calcPaypalGross(parseFloat(paypalReceiveAmount || '0'));
+  const paypalNetAmount = paypalCalcMode === 'send'
+    ? calcPaypalNet(parseFloat(amountSent || '0'))
+    : parseFloat(paypalReceiveAmount || '0');
+  const paypalFeeAmount = paypalGrossAmount - paypalNetAmount;
+  const paypalPercentageFee = paypalGrossAmount * PAYPAL_FEE_PERCENTAGE;
+  const paypalFixedFeeDisplay = PAYPAL_FIXED_FEE;
+
   const nextStep = () => {
     if (currentStep === 1 && (!amountSent || parseFloat(amountSent) <= 0)) {
       setError('Ingresa un monto válido');
@@ -866,57 +906,6 @@ export default function OperacionesPage() {
                 className="input"
               >
                 {availableFromCurrencies.map(currency => (
-                  <option key={currency.id} value={currency.id}>
-                    {currency.symbol} {currency.code} - {currency.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Amount Sent */}
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Monto Total a Enviar</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
-                  {getCurrency(fromCurrencyId)?.symbol}
-                </span>
-                <input
-                  type="number"
-                  value={amountSent}
-                  onChange={(e) => {
-                    setAmountSent(e.target.value);
-                    // Reset beneficiaries when amount changes
-                    setSelectedBeneficiaries([]);
-                  }}
-                  className="input pl-10 text-2xl font-bold text-center"
-                  placeholder="0.00"
-                  min="1"
-                  step="0.01"
-                />
-              </div>
-            </div>
-
-            {/* Exchange Rate Display */}
-            <div className="flex items-center justify-center gap-2 py-4">
-              <RefreshCw size={16} className="text-gray-400" />
-              <span className="text-sm text-gray-500">
-                Tasa: 1 {getCurrency(fromCurrencyId)?.code} = {getCurrentRate().toLocaleString('es-VE')} {getCurrency(toCurrencyId)?.code}
-              </span>
-            </div>
-
-            {/* To Currency */}
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Moneda Destino</label>
-              <select
-                value={toCurrencyId}
-                onChange={(e) => {
-                  setToCurrencyId(parseInt(e.target.value));
-                  setSelectedBeneficiaries([]);
-                }}
-                className={`input ${preselectedBeneficiaryId ? 'bg-gray-100 cursor-not-allowed opacity-70' : ''}`}
-                disabled={!!preselectedBeneficiaryId}
-              >
-                {availableToCurrencies.map(currency => (
                   <option key={currency.id} value={currency.id}>
                     {currency.symbol} {currency.code} - {currency.name}
                   </option>
@@ -1119,13 +1108,214 @@ export default function OperacionesPage() {
               </div>
             )}
 
+            {/* Amount Sent — PayPal mode shows bidirectional calculator */}
+            {isPaypalSelected ? (
+              <div className="space-y-4">
+                {/* Mode selector tabs */}
+                <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaypalCalcMode('send');
+                      setPaypalReceiveAmount('');
+                    }}
+                    className={`flex-1 py-3 text-sm font-semibold transition-all ${paypalCalcMode === 'send'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    Si envías
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaypalCalcMode('receive');
+                      setAmountSent('');
+                      setSelectedBeneficiaries([]);
+                    }}
+                    className={`flex-1 py-3 text-sm font-semibold transition-all ${paypalCalcMode === 'receive'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    Si recibimos
+                  </button>
+                </div>
+
+                {paypalCalcMode === 'send' ? (
+                  /* Mode: "Si envías" → Recibimos */
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Si envías</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
+                          {getCurrency(fromCurrencyId)?.symbol}
+                        </span>
+                        <input
+                          type="number"
+                          value={amountSent}
+                          onChange={(e) => {
+                            setAmountSent(e.target.value);
+                            setSelectedBeneficiaries([]);
+                          }}
+                          className="input pl-10 text-2xl font-bold text-center"
+                          placeholder="0.00"
+                          min="1"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                    {parseFloat(amountSent || '0') > 0 && (
+                      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                        <p className="text-sm font-semibold text-blue-700 mb-1">Recibimos</p>
+                        <p className="text-2xl font-bold text-blue-800">
+                          {getCurrency(fromCurrencyId)?.symbol} {paypalNetAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Mode: "Si recibimos" → Debes enviar */
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Si recibimos</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
+                          {getCurrency(fromCurrencyId)?.symbol}
+                        </span>
+                        <input
+                          type="number"
+                          value={paypalReceiveAmount}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPaypalReceiveAmount(val);
+                            // Auto-calculate gross and set as amountSent
+                            const net = parseFloat(val || '0');
+                            if (net > 0) {
+                              setAmountSent(calcPaypalGross(net).toFixed(2));
+                            } else {
+                              setAmountSent('');
+                            }
+                            setSelectedBeneficiaries([]);
+                          }}
+                          className="input pl-10 text-2xl font-bold text-center"
+                          placeholder="0.00"
+                          min="1"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                    {parseFloat(paypalReceiveAmount || '0') > 0 && (
+                      <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                        <p className="text-sm font-semibold text-amber-700 mb-1">Debes enviar</p>
+                        <p className="text-2xl font-bold text-amber-800">
+                          {getCurrency(fromCurrencyId)?.symbol} {paypalGrossAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Commission breakdown */}
+                {paypalGrossAmount > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle size={16} className="text-amber-500" />
+                      <p className="text-sm font-semibold text-gray-700">Comisión PayPal</p>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Comisión porcentual (5.4%)</span>
+                      <span className="text-red-600 font-medium">
+                        -{getCurrency(fromCurrencyId)?.symbol}{paypalPercentageFee.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Comisión fija</span>
+                      <span className="text-red-600 font-medium">
+                        -{getCurrency(fromCurrencyId)?.symbol}{paypalFixedFeeDisplay.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="border-t border-gray-200 pt-2 mt-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 font-semibold">Total comisión</span>
+                        <span className="text-red-600 font-bold">
+                          -{getCurrency(fromCurrencyId)?.symbol}{paypalFeeAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm mt-1">
+                        <span className="text-gray-600 font-semibold">Monto neto que llega</span>
+                        <span className="text-green-600 font-bold">
+                          {getCurrency(fromCurrencyId)?.symbol}{paypalNetAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Non-PayPal: standard amount input */
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Monto Total a Enviar</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
+                    {getCurrency(fromCurrencyId)?.symbol}
+                  </span>
+                  <input
+                    type="number"
+                    value={amountSent}
+                    onChange={(e) => {
+                      setAmountSent(e.target.value);
+                      setSelectedBeneficiaries([]);
+                    }}
+                    className="input pl-10 text-2xl font-bold text-center"
+                    placeholder="0.00"
+                    min="1"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* To Currency */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">Moneda Destino</label>
+              <select
+                value={toCurrencyId}
+                onChange={(e) => {
+                  setToCurrencyId(parseInt(e.target.value));
+                  setSelectedBeneficiaries([]);
+                }}
+                className={`input ${preselectedBeneficiaryId ? 'bg-gray-100 cursor-not-allowed opacity-70' : ''}`}
+                disabled={!!preselectedBeneficiaryId}
+              >
+                {availableToCurrencies.map(currency => (
+                  <option key={currency.id} value={currency.id}>
+                    {currency.symbol} {currency.code} - {currency.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Exchange Rate Display */}
+            <div className="flex items-center justify-center gap-2 py-4">
+              <RefreshCw size={16} className="text-gray-400" />
+              <span className="text-sm text-gray-500">
+                Tasa: 1 {getCurrency(fromCurrencyId)?.code} = {getCurrentRate().toLocaleString('es-VE')} {getCurrency(toCurrencyId)?.code}
+              </span>
+            </div>
+
             {/* Amount Received Preview */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 text-center border border-green-200">
               <p className="text-sm text-gray-600 mb-2">Monto Total a Recibir (aprox.)</p>
               <p className="text-3xl font-bold text-green-600">
-                {getCurrency(toCurrencyId)?.symbol} {(parseFloat(amountSent || '0') * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {getCurrency(toCurrencyId)?.symbol} {((isPaypalSelected ? paypalNetAmount : parseFloat(amountSent || '0')) * getCurrentRate()).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-gray-500 mt-2">{getCurrency(toCurrencyId)?.name}</p>
+              {isPaypalSelected && paypalGrossAmount > 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Tasa aplicada sobre el monto neto ({getCurrency(fromCurrencyId)?.symbol}{paypalNetAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1237,7 +1427,7 @@ export default function OperacionesPage() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Envías</span>
                 <span className="font-bold text-lg">
-                  {getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {getCurrency(fromCurrencyId)?.code}
+                  {getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {getCurrency(fromCurrencyId)?.code}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -1268,7 +1458,7 @@ export default function OperacionesPage() {
                 }`}>
                 <div className="flex justify-between items-center text-sm">
                   <span>Total a enviar:</span>
-                  <span className="font-bold text-lg text-gray-900">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toFixed(2)}</span>
+                  <span className="font-bold text-lg text-gray-900">{getCurrency(fromCurrencyId)?.symbol} {parseFloat(amountSent).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {selectedBeneficiaries.length > 1 && (
                   <>
