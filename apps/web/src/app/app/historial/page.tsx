@@ -24,7 +24,8 @@ import {
   Calendar,
   FileText,
   Image as ImageIcon,
-  Receipt
+  Receipt,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -673,8 +674,8 @@ export default function HistoryPage() {
                     </div>
                   </div>
 
-                  {/* Client Proof */}
-                  {selectedTransaction.client_proof_url && (
+                  {/* Client Proof - Hidden for PayPal */}
+                  {selectedTransaction.client_proof_url && !selectedTransaction.client_proof_url.startsWith('PAYPAL_VERIFIED') && (
                     <div className="space-y-3">
                       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <ImageIcon size={16} className="text-gray-400" />
@@ -700,8 +701,79 @@ export default function HistoryPage() {
                     </div>
                   )}
 
-                  {/* Admin Notes */}
-                  {selectedTransaction.admin_notes && (
+                  {/* PayPal Transaction Details */}
+                  {selectedTransaction.client_proof_url?.startsWith('PAYPAL_VERIFIED') && selectedTransaction.admin_notes && (() => {
+                    const notes = selectedTransaction.admin_notes;
+                    const emailMatch = notes.match(/PAYPAL_EMAIL:\s*([^\s|]+)/);
+                    const invoiceMatch = notes.match(/INVOICE_ID:\s*([^\s|]+)/);
+                    const txIdMatch = notes.match(/TRANSACTION_ID:\s*([^\s|]+)/);
+                    const payDateMatch = notes.match(/PAYMENT_DATE:\s*([^\s|]+)/);
+                    const refMatch = notes.match(/REFERENCE:\s*([^\s|]+)/);
+                    const paypalData = {
+                      email: emailMatch?.[1] || 'N/A',
+                      invoiceId: invoiceMatch?.[1] || 'N/A',
+                      transactionId: txIdMatch?.[1] || null,
+                      paymentDate: payDateMatch?.[1] || null,
+                      reference: refMatch?.[1] || null,
+                    };
+                    return (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                          <ShieldCheck size={16} className="text-blue-500" />
+                          Detalles de la transacción
+                        </h3>
+
+                        {/* PayPal Badge */}
+                        <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <ShieldCheck size={20} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-blue-800 text-sm">Pago verificado por PayPal</p>
+                            <p className="text-xs text-blue-600">Transacción confirmada automáticamente.</p>
+                          </div>
+                        </div>
+
+                        {/* PayPal Details Table */}
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl divide-y divide-gray-200">
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-gray-500">Método de pago</span>
+                            <span className="text-sm font-bold text-blue-700">PayPal Invoice</span>
+                          </div>
+                          {paypalData.transactionId && paypalData.transactionId !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-gray-500">ID de transacción</span>
+                              <span className="text-sm font-mono font-bold text-gray-800">{paypalData.transactionId}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-gray-500">N.° de factura</span>
+                            <span className="text-sm font-mono font-bold text-gray-800">{paypalData.invoiceId}</span>
+                          </div>
+                          {paypalData.reference && paypalData.reference !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-gray-500">Formato de pago n.°</span>
+                              <span className="text-sm font-mono font-bold text-gray-800">{paypalData.reference}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-gray-500">Correo del cliente</span>
+                            <span className="text-sm font-medium text-gray-800">{paypalData.email}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-gray-500">Estado del pago</span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full">
+                              <CheckCircle2 size={14} />
+                              Pagado
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Admin Notes - Only for non-PayPal */}
+                  {selectedTransaction.admin_notes && !selectedTransaction.client_proof_url?.startsWith('PAYPAL_VERIFIED') && (
                     <div className="space-y-3">
                       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <AlertCircle size={16} className="text-amber-500" />
