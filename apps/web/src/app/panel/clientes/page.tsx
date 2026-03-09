@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { clienteService } from '@/services/cliente.service';
+import { supabase } from '@/lib/supabase/client';
 import {
   Users,
   Search,
@@ -21,7 +22,8 @@ import {
   X,
   History,
   Loader2,
-  Building2
+  Building2,
+  UserCheck
 } from 'lucide-react';
 
 interface Client {
@@ -36,6 +38,7 @@ interface Client {
   document_number: string | null;
   role: string;
   is_kyc_verified: boolean;
+  is_affiliate: boolean;
   created_at: string;
   updated_at: string;
   avatar_url: string | null;
@@ -71,6 +74,7 @@ export default function ClientesPage() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
   const [clientAvatarUrl, setClientAvatarUrl] = useState<string | null>(null);
+  const [togglingAffiliateId, setTogglingAffiliateId] = useState<string | null>(null);
 
   useEffect(() => {
     loadInitialData();
@@ -147,6 +151,37 @@ export default function ClientesPage() {
       }
     } finally {
       setLoadingBeneficiaries(false);
+    }
+  };
+
+  const toggleAffiliate = async (clientId: string, currentValue: boolean) => {
+    setTogglingAffiliateId(clientId);
+    try {
+      const newValue = !currentValue;
+      const newRole = newValue ? 'AFFILIATE' : 'CLIENT';
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_affiliate: newValue,
+          role: newRole,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', clientId);
+
+      if (error) throw error;
+
+      // Update local state
+      setClients(prev =>
+        prev.map(c =>
+          c.id === clientId
+            ? { ...c, is_affiliate: newValue, role: newRole }
+            : c
+        )
+      );
+    } catch (error) {
+      console.error('Error toggling affiliate:', error);
+    } finally {
+      setTogglingAffiliateId(null);
     }
   };
 
@@ -346,6 +381,9 @@ export default function ClientesPage() {
                       Registro
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Afiliado
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
@@ -359,8 +397,14 @@ export default function ClientesPage() {
                             {client.first_name?.[0]}{client.last_name?.[0]}
                           </div>
                           <div>
-                            <p className="font-medium text-slate-800">
+                            <p className="font-medium text-slate-800 flex items-center gap-1.5">
                               {client.first_name} {client.last_name}
+                              {client.is_affiliate && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+                                  <UserCheck size={10} />
+                                  Afiliado
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-slate-500">{client.email}</p>
                           </div>
@@ -400,6 +444,20 @@ export default function ClientesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
+                        <button
+                          onClick={() => toggleAffiliate(client.id, client.is_affiliate)}
+                          disabled={togglingAffiliateId === client.id}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 ${client.is_affiliate ? 'bg-purple-600' : 'bg-slate-300'
+                            }`}
+                          title={client.is_affiliate ? 'Desactivar afiliado' : 'Activar afiliado'}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${client.is_affiliate ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => handleOpenDetailModal(client)}
@@ -437,8 +495,14 @@ export default function ClientesPage() {
                         {client.first_name?.[0]}{client.last_name?.[0]}
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">
+                        <p className="font-medium text-slate-800 flex items-center gap-1.5">
                           {client.first_name} {client.last_name}
+                          {client.is_affiliate && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+                              <UserCheck size={10} />
+                              Afiliado
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-slate-500">{client.email}</p>
                       </div>
@@ -465,7 +529,21 @@ export default function ClientesPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">Afiliado</span>
+                      <button
+                        onClick={() => toggleAffiliate(client.id, client.is_affiliate)}
+                        disabled={togglingAffiliateId === client.id}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${client.is_affiliate ? 'bg-purple-600' : 'bg-slate-300'
+                          }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${client.is_affiliate ? 'translate-x-4.5' : 'translate-x-0.5'
+                            }`}
+                        />
+                      </button>
+                    </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleOpenDetailModal(client)}
