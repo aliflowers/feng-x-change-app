@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, Building, User, Hash, CreditCard, ChevronDown, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -88,6 +88,8 @@ interface PageProps {
 export default function EditBeneficiaryPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const txId = searchParams.get('tx_id');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -218,7 +220,23 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
 
       if (error) throw error;
 
-      router.push('/app/beneficiarios');
+      if (txId) {
+        // Call API route to update transaction status (bypasses RLS)
+        const response = await fetch('/api/transactions/fix-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txId }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Error al actualizar la operación');
+        }
+
+        router.push('/app/historial');
+      } else {
+        router.push('/app/beneficiarios');
+      }
       router.refresh();
     } catch (error) {
       console.error('Error updating beneficiary:', error);
@@ -299,8 +317,12 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
             <ArrowLeft size={24} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Editar Beneficiario</h1>
-            <p className="text-gray-500 text-sm">Actualiza los datos de esta cuenta.</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {txId ? 'Corregir Datos del Beneficiario - Operación con Error' : 'Editar Beneficiario'}
+            </h1>
+            <p className="text-gray-500 text-sm">
+              {txId ? 'Corrige los datos del beneficiario para que la operación sea completada con éxito.' : 'Actualiza los datos de esta cuenta.'}
+            </p>
           </div>
         </div>
         <button
@@ -445,7 +467,7 @@ export default function EditBeneficiaryPage({ params }: PageProps) {
                 ) : (
                   <>
                     <Save size={20} />
-                    Guardar Cambios
+                    {txId ? 'Guardar y Enviar Operación con Datos Corregidos' : 'Guardar Cambios'}
                   </>
                 )}
               </button>

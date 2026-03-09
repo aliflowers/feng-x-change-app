@@ -118,7 +118,7 @@ export default function TomadasPage() {
             bank:banks(name)
           )
         `)
-        .eq('status', 'TAKEN')
+        .in('status', ['TAKEN', 'ERROR'])
         .eq('taken_by', uid)
         .order('taken_at', { ascending: false });
 
@@ -133,7 +133,15 @@ export default function TomadasPage() {
   }, [currentUserId]);
 
   // Countdown timer: 15 minutes from when operation was taken
-  const getCountdownTime = (takenAt: string) => {
+  const getCountdownTime = (takenAt: string, status: string) => {
+    if (status === 'ERROR') {
+      return {
+        text: 'Esperando cliente',
+        isOverdue: false,
+        isSuperAdmin: userRole === 'SUPER_ADMIN'
+      };
+    }
+
     const takenTime = new Date(takenAt).getTime();
     const elapsedMs = currentTime - takenTime;
     const limitMs = 15 * 60 * 1000; // 15 minutes in milliseconds
@@ -253,13 +261,11 @@ export default function TomadasPage() {
 
     setSubmitting(true);
     try {
-      // Return to pool with admin note
+      // Update transaction to ERROR status
       const { error } = await supabase
         .from('transactions')
         .update({
-          status: 'POOL',
-          taken_by: null,
-          taken_at: null,
+          status: 'ERROR',
           admin_notes: `Error reportado: ${errorNote.trim()}`,
         })
         .eq('id', selectedOperation.id);
@@ -328,12 +334,13 @@ export default function TomadasPage() {
       ) : (
         <div className="grid gap-4">
           {operations.map((op) => {
-            const timeInfo = getCountdownTime(op.taken_at);
+            const timeInfo = getCountdownTime(op.taken_at, op.status);
             const showAsOverdue = timeInfo.isOverdue && !timeInfo.isSuperAdmin;
+            const hasError = op.status === 'ERROR';
             return (
               <div
                 key={op.id}
-                className={`bg-white rounded-2xl border ${showAsOverdue ? 'border-red-300' : 'border-slate-200'} p-5 shadow-sm`}
+                className={`bg-white rounded-2xl border ${hasError ? 'border-red-300 bg-red-50/30' : showAsOverdue ? 'border-red-300' : 'border-slate-200'} p-5 shadow-sm`}
               >
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                   {/* Left: Operation Info */}
@@ -365,12 +372,12 @@ export default function TomadasPage() {
                     {/* Countdown Timer */}
                     <div>
                       <p className="text-xs text-slate-500 mb-1">
-                        {timeInfo.isSuperAdmin ? 'Tiempo' : 'Tiempo Restante'}
+                        {hasError ? 'Estado' : timeInfo.isSuperAdmin ? 'Tiempo' : 'Tiempo Restante'}
                       </p>
-                      <div className={`flex items-center gap-1 ${timeInfo.isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <div className={`flex items-center gap-1 ${hasError ? 'text-slate-600' : timeInfo.isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
                         <Timer size={16} />
-                        <span className="font-mono font-bold text-lg">{timeInfo.text}</span>
-                        {showAsOverdue && (
+                        <span className={`font-mono font-bold ${hasError ? 'text-sm' : 'text-lg'}`}>{timeInfo.text}</span>
+                        {showAsOverdue && !hasError && (
                           <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-1">
                             Demorada
                           </span>
@@ -380,37 +387,46 @@ export default function TomadasPage() {
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 flex-shrink-0 mt-4 lg:mt-0">
                     <button
                       onClick={() => {
                         setSelectedOperation(op);
                         setShowBeneficiaryModal(true);
                       }}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
                       title="Ver datos"
                     >
                       <Eye size={20} className="text-slate-600" />
                     </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOperation(op);
-                        setShowErrorModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
-                    >
-                      <AlertTriangle size={18} />
-                      Reportar Error
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOperation(op);
-                        setShowPaymentModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                    >
-                      <CheckCircle2 size={18} />
-                      Marcar Pagada
-                    </button>
+                    {op.status === 'ERROR' ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl font-medium">
+                        <AlertTriangle size={18} />
+                        En corrección por cliente
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedOperation(op);
+                            setShowErrorModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-100 transition-colors"
+                        >
+                          <AlertTriangle size={18} />
+                          Reportar Error
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedOperation(op);
+                            setShowPaymentModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                        >
+                          <CheckCircle2 size={18} />
+                          Marcar Pagada
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

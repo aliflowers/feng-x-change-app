@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  Pencil,
   Plus,
   X,
   Building,
@@ -92,6 +94,14 @@ const getStatusConfig = (status: string) => {
         textColor: 'text-red-700',
         borderColor: 'border-red-300',
         icon: XCircle,
+      };
+    case 'ERROR':
+      return {
+        label: 'Error en datos',
+        bgColor: 'bg-rose-100',
+        textColor: 'text-rose-700',
+        borderColor: 'border-rose-300',
+        icon: AlertTriangle,
       };
     default:
       return {
@@ -553,12 +563,34 @@ export default function HistoryPage() {
                     const statusConfig = getStatusConfig(selectedTransaction.status);
                     const StatusIcon = statusConfig.icon;
                     return (
-                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${statusConfig.bgColor} ${statusConfig.textColor} border ${statusConfig.borderColor}`}>
-                        <StatusIcon size={18} />
-                        <span className="font-semibold">{statusConfig.label}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${statusConfig.bgColor} ${statusConfig.textColor} border ${statusConfig.borderColor} self-start`}>
+                          <StatusIcon size={18} />
+                          <span className="font-semibold">{statusConfig.label}</span>
+                        </div>
+                        {selectedTransaction.status === 'ERROR' && (
+                          <Link
+                            href={`/app/beneficiarios/${selectedTransaction.user_bank_account_id}?tx_id=${selectedTransaction.id}`}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-colors shadow-sm font-medium w-full sm:w-auto"
+                          >
+                            <Pencil size={18} />
+                            Corregir datos del beneficiario
+                          </Link>
+                        )}
                       </div>
                     );
                   })()}
+
+                  {/* Admin Notes for Error */}
+                  {selectedTransaction.status === 'ERROR' && selectedTransaction.admin_notes && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex gap-3 text-rose-800">
+                      <AlertTriangle className="shrink-0 mt-0.5" size={20} />
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">El administrador reportó un problema:</h4>
+                        <p className="text-sm">{selectedTransaction.admin_notes}</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Amounts */}
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">

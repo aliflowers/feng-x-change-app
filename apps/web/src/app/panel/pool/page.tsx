@@ -21,6 +21,7 @@ import {
   Check,
   ArrowRight,
   ShieldCheck,
+  AlertCircle,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -60,6 +61,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: LucideI
   POOL: { label: 'Por verificar', color: 'text-amber-600', icon: Inbox, bgColor: 'bg-amber-100' },
   VERIFIED: { label: 'Verificada', color: 'text-purple-600', icon: ShieldCheck, bgColor: 'bg-purple-100' },
   TAKEN: { label: 'Tomada', color: 'text-blue-600', icon: Clock, bgColor: 'bg-blue-100' },
+  ERROR: { label: 'En corrección', color: 'text-red-600', icon: AlertCircle, bgColor: 'bg-red-100' },
   COMPLETED: { label: 'Completada', color: 'text-emerald-600', icon: CheckCircle2, bgColor: 'bg-emerald-100' },
   REJECTED: { label: 'Rechazada', color: 'text-red-600', icon: XCircle, bgColor: 'bg-red-100' },
 };
@@ -440,6 +442,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
             <option value="POOL">Por verificar</option>
             <option value="VERIFIED">Verificadas</option>
             <option value="TAKEN">Tomadas</option>
+            <option value="ERROR">En corrección</option>
             <option value="COMPLETED">Completadas</option>
             <option value="REJECTED">Rechazadas</option>
           </select>
@@ -644,6 +647,18 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             >
                               <HandMetal size={16} />
                               Tomar
+                            </button>
+                          )}
+
+                          {/* Blocked Take Button for operations in ERROR state */}
+                          {op.status === 'ERROR' && (
+                            <button
+                              disabled
+                              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed border border-slate-200"
+                              title="Esperando que el cliente corrija los datos"
+                            >
+                              <AlertCircle size={16} />
+                              En corrección
                             </button>
                           )}
                         </div>
