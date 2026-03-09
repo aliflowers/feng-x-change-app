@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -13,11 +13,17 @@ import {
   ChevronRight,
   ChevronLeft,
   Building,
+  Copy,
+  CheckCircle,
   RefreshCw,
   Info,
   Plus,
   X,
-  Users
+  Users,
+  Search,
+  ChevronDown,
+  AlertTriangle,
+  Mail
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -62,6 +68,16 @@ interface Bank {
   currency_code: string;
   type: string;
   code: string | null;
+}
+
+interface CompanyBankAccount {
+  id: number;
+  name: string;
+  type: 'BANK' | 'PLATFORM';
+  currency_id: number;
+  account_number: string;
+  account_holder: string;
+  bank_code: string | null;
 }
 
 interface SelectedBeneficiary {
@@ -138,6 +154,29 @@ export default function OperacionesPage() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserBankAccount[]>([]);
+  const [companyAccounts, setCompanyAccounts] = useState<CompanyBankAccount[]>([]);
+  const [selectedCompanyAccountId, setSelectedCompanyAccountId] = useState<number | null>(null);
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [sendingPaypalInvoice, setSendingPaypalInvoice] = useState(false);
+  const [paypalInvoiceSent, setPaypalInvoiceSent] = useState(false);
+  const [paypalInvoiceId, setPaypalInvoiceId] = useState<string | null>(null);
+  const [paypalInvoiceError, setPaypalInvoiceError] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownSearch, setDropdownSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
 
   // Pre-selected beneficiary from URL
   const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(null);
@@ -243,10 +282,18 @@ export default function OperacionesPage() {
         .select('id, name, country_code, currency_code, type, code')
         .eq('is_active', true);
 
+      // Load company bank accounts (banks_platforms) for deposit info
+      const { data: companyBanksData } = await supabase
+        .from('banks_platforms')
+        .select('id, name, type, currency_id, account_number, account_holder, bank_code')
+        .eq('is_active', true)
+        .order('name');
+
       if (currenciesData) setCurrencies(currenciesData);
       if (ratesData) setExchangeRates(ratesData);
       if (accountsData) setUserAccounts(accountsData as unknown as UserBankAccount[]);
       if (banksData) setBanks(banksData);
+      if (companyBanksData) setCompanyAccounts(companyBanksData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Error al cargar los datos');
@@ -476,6 +523,17 @@ export default function OperacionesPage() {
       return;
     }
 
+    // Validate PayPal email if PayPal is selected
+    const paypalAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+    const isPaypalFlow = paypalAccount?.name.toLowerCase().includes('paypal');
+    if (isPaypalFlow) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!paypalEmail || !emailRegex.test(paypalEmail)) {
+        setError('Ingresa un correo de PayPal válido para recibir la solicitud de pago');
+        return;
+      }
+    }
+
     // Validate amounts match total
     const totalSent = parseFloat(amountSent);
     if (Math.abs(totalAmountToBeneficiaries - totalSent) > 0.01) {
@@ -527,6 +585,10 @@ export default function OperacionesPage() {
         }
       }
 
+      // Determine if PayPal is selected
+      const selectedAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+      const isPaypal = selectedAccount?.name.toLowerCase().includes('paypal');
+
       // Create transactions for each beneficiary
       const rate = getCurrentRate();
       const transactions = selectedBeneficiaries.map((b, index) => {
@@ -543,6 +605,8 @@ export default function OperacionesPage() {
           amount_received: b.amountToSend * rate,
           user_bank_account_id: b.accountId,
           client_proof_url: proofUrl,
+          bank_platform_id: selectedCompanyAccountId,
+          admin_notes: isPaypal ? `PAYPAL_EMAIL: ${paypalEmail} | INVOICE_ID: ${paypalInvoiceId || 'N/A'}` : null,
           status: 'POOL',
           transaction_number: uniqueTxNumber
         };
@@ -553,6 +617,8 @@ export default function OperacionesPage() {
         .insert(transactions);
 
       if (txError) throw txError;
+
+
 
       setSuccess(true);
       setTimeout(() => {
@@ -569,9 +635,63 @@ export default function OperacionesPage() {
   };
 
   // Step navigation
+  // Company accounts filtered by selected origin currency
+  const companyAccountsForCurrency = useMemo(() =>
+    companyAccounts.filter(acc => acc.currency_id === fromCurrencyId),
+    [companyAccounts, fromCurrencyId]
+  );
+
+  // Auto-select if only one company account available
+  useEffect(() => {
+    if (companyAccountsForCurrency.length === 1) {
+      setSelectedCompanyAccountId(companyAccountsForCurrency[0].id);
+    } else if (!companyAccountsForCurrency.find(a => a.id === selectedCompanyAccountId)) {
+      setSelectedCompanyAccountId(null);
+    }
+  }, [companyAccountsForCurrency, selectedCompanyAccountId]);
+
+  // Mapeo de logos de bancos/plataformas
+  const COMPANY_BANK_LOGOS: Record<string, string> = {
+    'Banco de Venezuela': '/flags/bdv.png',
+    'BDV': '/flags/bdv.png',
+    'Banesco': '/flags/banesco-768x256.jpg',
+    'Mercantil': '/flags/banco-mercantil.jpg',
+    'Banco Mercantil': '/flags/banco-mercantil.jpg',
+    'BNC': '/flags/bnc.png',
+    'Banco Nacional de Crédito': '/flags/bnc.png',
+    'BCP': '/flags/BCP-Peru.svg',
+    'Interbank': '/flags/Interbank.jpeg',
+    'Yape': '/flags/Yape.svg',
+    'Plin': '/flags/Plin.png',
+    'Scotiabank': '/flags/scotiabank.svg',
+    'Bancolombia': '/flags/bancolombia.svg',
+    'Nequi': '/flags/Nequi.jpeg',
+    'Banco Estado': '/flags/Banco-estado-chile.svg',
+    'Zelle': '/flags/Zelle.svg',
+    'PayPal': '/flags/PayPal.svg',
+    'Zinli': '/flags/Zinli.jpg',
+    'Binance': '/flags/Binance.jpeg',
+    'Binance Pay': '/flags/Binance.jpeg',
+    'USDT': '/flags/usdt.svg',
+  };
+
+  // Copiar al portapapeles
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   const nextStep = () => {
     if (currentStep === 1 && (!amountSent || parseFloat(amountSent) <= 0)) {
       setError('Ingresa un monto válido');
+      return;
+    }
+
+    // Validate company account selection
+    if (currentStep === 1 && companyAccountsForCurrency.length > 0 && !selectedCompanyAccountId) {
+      setError('Selecciona el banco o plataforma por donde realizarás tu envío');
       return;
     }
 
@@ -684,7 +804,10 @@ export default function OperacionesPage() {
               <label className="text-sm font-semibold text-gray-700">Moneda Origen</label>
               <select
                 value={fromCurrencyId}
-                onChange={(e) => setFromCurrencyId(parseInt(e.target.value))}
+                onChange={(e) => {
+                  setFromCurrencyId(parseInt(e.target.value));
+                  setSelectedCompanyAccountId(null);
+                }}
                 className="input"
               >
                 {availableFromCurrencies.map(currency => (
@@ -745,6 +868,201 @@ export default function OperacionesPage() {
                 ))}
               </select>
             </div>
+
+            {/* Company Bank/Platform Selector */}
+            {companyAccountsForCurrency.length > 0 && (
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700">
+                  ¿Por dónde enviarás tu {getCurrency(fromCurrencyId)?.code}?
+                </label>
+                <p className="text-xs text-gray-500 -mt-1">
+                  Escoge el banco o plataforma por donde deseas hacer tu envío
+                </p>
+
+                {/* Adaptive: Cards if ≤7, Custom Dropdown if >7 */}
+                {companyAccountsForCurrency.length <= 7 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {companyAccountsForCurrency.map(account => {
+                      const isSelected = selectedCompanyAccountId === account.id;
+                      const logoPath = COMPANY_BANK_LOGOS[account.name];
+                      return (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => setSelectedCompanyAccountId(account.id)}
+                          className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${isSelected
+                            ? 'border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                            }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-2 right-2">
+                              <CheckCircle2 className="text-blue-600" size={18} />
+                            </div>
+                          )}
+                          {logoPath ? (
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center">
+                              <img
+                                src={logoPath}
+                                alt={account.name}
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  if (target.parentElement) {
+                                    target.parentElement.innerHTML = `<span class="text-white font-bold text-sm">${account.name.substring(0, 2).toUpperCase()}</span>`;
+                                    target.parentElement.className = `w-10 h-10 rounded-lg flex items-center justify-center ${account.type === 'BANK'
+                                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                                      : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                                      }`;
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm ${account.type === 'BANK'
+                              ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                              : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                              }`}>
+                              {account.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className={`text-sm font-semibold leading-tight ${isSelected ? 'text-blue-700' : 'text-gray-800'}`}>
+                              {account.name}
+                            </p>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full mt-1 inline-block ${account.type === 'BANK'
+                              ? 'bg-blue-100 text-blue-600'
+                              : 'bg-purple-100 text-purple-600'
+                              }`}>
+                              {account.type === 'BANK' ? 'Banco' : 'Plataforma'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Custom Dropdown with Search for >7 options */
+                  <div className="relative" ref={dropdownRef}>
+                    {/* Trigger button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDropdownOpen(!dropdownOpen);
+                        setDropdownSearch('');
+                      }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${selectedCompanyAccountId
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                    >
+                      {(() => {
+                        const selected = companyAccountsForCurrency.find(a => a.id === selectedCompanyAccountId);
+                        if (selected) {
+                          const logoPath = COMPANY_BANK_LOGOS[selected.name];
+                          return (
+                            <>
+                              {logoPath ? (
+                                <div className="w-8 h-8 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <img src={logoPath} alt={selected.name} className="w-full h-full object-contain" />
+                                </div>
+                              ) : (
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-bold text-xs ${selected.type === 'BANK' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                                  }`}>
+                                  {selected.name.substring(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 text-left">
+                                <p className="text-sm font-semibold text-gray-800">{selected.name}</p>
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${selected.type === 'BANK' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                                  {selected.type === 'BANK' ? 'Banco' : 'Plataforma'}
+                                </span>
+                              </div>
+                            </>
+                          );
+                        }
+                        return (
+                          <>
+                            <Building size={20} className="text-gray-400 flex-shrink-0" />
+                            <span className="flex-1 text-left text-sm text-gray-500">Selecciona un banco o plataforma...</span>
+                          </>
+                        );
+                      })()}
+                      <ChevronDown size={18} className={`text-gray-400 transition-transform flex-shrink-0 ${dropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Dropdown panel */}
+                    {dropdownOpen && (
+                      <div className="absolute z-50 w-full mt-2 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden">
+                        {/* Search input */}
+                        <div className="p-3 border-b border-gray-100">
+                          <div className="relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="text"
+                              value={dropdownSearch}
+                              onChange={(e) => setDropdownSearch(e.target.value)}
+                              placeholder="Buscar banco o plataforma..."
+                              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        {/* Options list */}
+                        <div className="max-h-60 overflow-y-auto">
+                          {companyAccountsForCurrency
+                            .filter(a => a.name.toLowerCase().includes(dropdownSearch.toLowerCase()))
+                            .map(account => {
+                              const isSelected = selectedCompanyAccountId === account.id;
+                              const logoPath = COMPANY_BANK_LOGOS[account.name];
+                              return (
+                                <button
+                                  key={account.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCompanyAccountId(account.id);
+                                    setDropdownOpen(false);
+                                    setDropdownSearch('');
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${isSelected
+                                    ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                                    : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+                                    }`}
+                                >
+                                  {logoPath ? (
+                                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center flex-shrink-0">
+                                      <img src={logoPath} alt={account.name} className="w-full h-full object-contain" />
+                                    </div>
+                                  ) : (
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-bold text-xs ${account.type === 'BANK' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                                      }`}>
+                                      {account.name.substring(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <p className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-gray-800'}`}>{account.name}</p>
+                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${account.type === 'BANK' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                                      {account.type === 'BANK' ? 'Banco' : 'Plataforma'}
+                                    </span>
+                                  </div>
+                                  {isSelected && <CheckCircle2 className="text-blue-600 flex-shrink-0" size={18} />}
+                                </button>
+                              );
+                            })
+                          }
+                          {companyAccountsForCurrency.filter(a => a.name.toLowerCase().includes(dropdownSearch.toLowerCase())).length === 0 && (
+                            <div className="px-4 py-6 text-center text-sm text-gray-500">
+                              No se encontraron resultados para &quot;{dropdownSearch}&quot;
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Amount Received Preview */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 text-center border border-green-200">
@@ -1009,26 +1327,278 @@ export default function OperacionesPage() {
               })}
             </div>
 
-            {/* Datos bancarios de Fengxchange (placeholder) */}
+            {/* Datos bancarios de Fengxchange */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-5 text-white">
               <div className="flex items-center gap-2 mb-3">
                 <Building className="flex-shrink-0" size={20} />
                 <h3 className="font-bold">Datos para depositar tu {getCurrency(fromCurrencyId)?.code}</h3>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-center gap-2 text-white/80">
-                  <Info size={18} />
-                  <p className="text-sm">
-                    Los datos bancarios de Fengxchange serán cargados por el administrador.
-                    Por ahora, contacta a soporte para obtener los datos de depósito.
-                  </p>
-                </div>
-                {/* TODO: Mostrar datos bancarios de Fengxchange según fromCurrencyId
-                    - Si es USD: cuenta Zelle, Wise, etc.
-                    - Si es EUR: cuenta SEPA, etc.
-                    Estos datos vendrán de la tabla company_bank_accounts configurada por el super admin
-                */}
-              </div>
+              {(() => {
+                const selectedAccount = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+                if (selectedAccount) {
+                  // Check if PayPal is selected
+                  const isPaypalSelected = selectedAccount.name.toLowerCase().includes('paypal');
+
+                  if (isPaypalSelected) {
+                    // PayPal-specific UI: email input + invoice flow explanation
+                    return (
+                      <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm space-y-4">
+                        {/* PayPal header with logo */}
+                        <div className="flex items-center gap-3">
+                          {COMPANY_BANK_LOGOS[selectedAccount.name] ? (
+                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
+                              <img
+                                src={COMPANY_BANK_LOGOS[selectedAccount.name]}
+                                alt={selectedAccount.name}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-500 text-white font-bold text-sm">
+                              PP
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-bold text-white">Solicitud de Pago PayPal</p>
+                            <span className="text-[10px] font-medium bg-yellow-400/20 text-yellow-200 px-1.5 py-0.5 rounded-full">
+                              Flujo especial
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Instructions */}
+                        <div className="border-t border-white/20 pt-3">
+                          <div className="flex items-start gap-2 mb-3">
+                            <Info size={16} className="text-blue-300 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-white/80 leading-relaxed">
+                              Por políticas de seguridad, no aceptamos pagos directos por PayPal.
+                              Se te enviará una <strong className="text-white">solicitud de pago</strong> desde
+                              <strong className="text-white"> &quot;{selectedAccount.account_holder}&quot;</strong> a
+                              tu correo de PayPal para que la pagues voluntariamente.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* PayPal email input */}
+                        <div className="border-t border-white/20 pt-3">
+                          <label className="text-xs text-white/60 mb-1.5 block">Tu correo de PayPal *</label>
+                          <div className="relative">
+                            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                            <input
+                              type="email"
+                              value={paypalEmail}
+                              onChange={(e) => setPaypalEmail(e.target.value)}
+                              placeholder="tu-email@ejemplo.com"
+                              className="w-full pl-9 pr-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+                            />
+                          </div>
+                          {paypalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail) && (
+                            <p className="text-xs text-red-300 mt-1">Ingresa un correo electrónico válido</p>
+                          )}
+
+                          {/* Request PayPal Invoice Button */}
+                          {!paypalInvoiceSent ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!paypalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail)) return;
+                                setSendingPaypalInvoice(true);
+                                setPaypalInvoiceError(null);
+                                try {
+                                  const totalAmount = selectedBeneficiaries.reduce((sum, b) => sum + b.amountToSend, 0);
+                                  const res = await fetch('/api/paypal/create-invoice', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      recipientEmail: paypalEmail,
+                                      amount: totalAmount.toFixed(2),
+                                      currencyCode: getCurrency(fromCurrencyId)?.code || 'USD',
+                                      transactionNumber: `REQ-${Date.now()}`,
+                                    }),
+                                  });
+                                  const data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || 'Error al enviar solicitud');
+                                  setPaypalInvoiceId(data.invoiceId);
+                                  setPaypalInvoiceSent(true);
+                                } catch (err) {
+                                  console.error('PayPal invoice error:', err);
+                                  setPaypalInvoiceError(err instanceof Error ? err.message : 'Error al enviar la solicitud de pago');
+                                } finally {
+                                  setSendingPaypalInvoice(false);
+                                }
+                              }}
+                              disabled={sendingPaypalInvoice || !paypalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail)}
+                              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-yellow-500 hover:bg-yellow-400 text-gray-900"
+                            >
+                              {sendingPaypalInvoice ? (
+                                <>
+                                  <Loader2 className="animate-spin" size={16} />
+                                  Enviando solicitud...
+                                </>
+                              ) : (
+                                <>
+                                  <Mail size={16} />
+                                  Solicitar pago
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <div className="mt-3 flex items-center gap-2 py-2.5 px-4 rounded-lg bg-green-500/20 border border-green-400/30">
+                              <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+                              <p className="text-xs text-green-300">
+                                Solicitud enviada a <strong className="text-green-200">{paypalEmail}</strong>. Revisa tu correo, paga y sube el comprobante.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Error message */}
+                          {paypalInvoiceError && (
+                            <div className="mt-2 flex items-center gap-2 py-2 px-3 rounded-lg bg-red-500/20 border border-red-400/30">
+                              <AlertTriangle size={14} className="text-red-400 flex-shrink-0" />
+                              <p className="text-xs text-red-300">{paypalInvoiceError}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Steps explanation */}
+                        <div className="border-t border-white/20 pt-3">
+                          <p className="text-xs font-semibold text-white/70 mb-2">Proceso:</p>
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">1</span>
+                              <p className="text-xs text-white/60">Recibirás una solicitud de pago en tu correo de PayPal</p>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">2</span>
+                              <p className="text-xs text-white/60">Paga la solicitud desde tu cuenta PayPal</p>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">3</span>
+                              <p className="text-xs text-white/60">Sube la captura de pantalla del pago como comprobante más abajo</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Warning */}
+                        <div className="border-t border-orange-500/30 pt-3 flex items-start gap-2">
+                          <AlertTriangle size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-orange-300/80">
+                            Revisa tu bandeja de entrada y spam después de solicitar el pago.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Standard bank/platform UI (non-PayPal)
+                  return (
+                    <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm space-y-3">
+                      {/* Bank/Platform name with logo */}
+                      <div className="flex items-center gap-3">
+                        {COMPANY_BANK_LOGOS[selectedAccount.name] ? (
+                          <div className="w-9 h-9 rounded-lg overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
+                            <img
+                              src={COMPANY_BANK_LOGOS[selectedAccount.name]}
+                              alt={selectedAccount.name}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${selectedAccount.type === 'BANK' ? 'bg-white/20' : 'bg-white/20'} text-white font-bold text-sm`}>
+                            {selectedAccount.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-bold text-white">{selectedAccount.name}</p>
+                          <span className="text-[10px] font-medium bg-white/20 px-1.5 py-0.5 rounded-full">
+                            {selectedAccount.type === 'BANK' ? 'Banco' : 'Plataforma'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Account holder */}
+                      <div className="border-t border-white/20 pt-3">
+                        <p className="text-xs text-white/60 mb-0.5">Titular</p>
+                        <p className="font-semibold text-white">{selectedAccount.account_holder}</p>
+                      </div>
+
+                      {/* Account number with copy button */}
+                      <div className="border-t border-white/20 pt-3">
+                        <p className="text-xs text-white/60 mb-0.5">Cuenta / Identificador</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono font-semibold text-white break-all">{selectedAccount.account_number}</p>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(selectedAccount.account_number, 'account')}
+                            className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                            title="Copiar"
+                          >
+                            {copiedField === 'account' ? (
+                              <CheckCircle className="text-green-300" size={16} />
+                            ) : (
+                              <Copy className="text-white/70" size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bank code if exists */}
+                      {selectedAccount.bank_code && (
+                        <div className="border-t border-white/20 pt-3">
+                          <p className="text-xs text-white/60 mb-0.5">Código del Banco</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-mono font-semibold text-white">{selectedAccount.bank_code}</p>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(selectedAccount.bank_code!, 'bankcode')}
+                              className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                              title="Copiar"
+                            >
+                              {copiedField === 'bankcode' ? (
+                                <CheckCircle className="text-green-300" size={16} />
+                              ) : (
+                                <Copy className="text-white/70" size={16} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reminder / Warning */}
+                      {selectedAccount.name.toLowerCase().includes('zelle') ? (
+                        <div className="border-t border-orange-500/40 pt-3 flex items-start gap-2">
+                          <AlertTriangle size={16} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs font-semibold text-orange-300">
+                            NO COLOCAR NADA EN EL CAMPO DE &quot;CONCEPTO&quot;. DEBE DEJAR ESE ESPACIO EN BLANCO, DE LO CONTRARIO SU TRANSACCIÓN PUEDE SER REVERSADA.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border-t border-white/20 pt-3 flex items-start gap-2">
+                          <Info size={14} className="text-white/50 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-white/60">
+                            Realiza tu depósito a esta cuenta y luego sube el comprobante de pago más abajo.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // No account selected or no accounts available
+                return (
+                  <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
+                    <div className="flex items-center justify-center gap-2 text-white/80">
+                      <Info size={18} />
+                      <p className="text-sm">
+                        {companyAccountsForCurrency.length === 0
+                          ? 'No hay cuentas disponibles para esta moneda. Contacta a soporte para obtener los datos de depósito.'
+                          : 'Selecciona un banco o plataforma en el paso anterior para ver los datos de depósito.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Proof Upload - Multiple images */}
@@ -1123,7 +1693,13 @@ export default function OperacionesPage() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={submitting || proofFiles.length === 0}
+              disabled={submitting || proofFiles.length === 0 || (() => {
+                const pa = companyAccounts.find(a => a.id === selectedCompanyAccountId);
+                if (pa?.name.toLowerCase().includes('paypal')) {
+                  return !paypalInvoiceSent;
+                }
+                return false;
+              })()}
               className="btn-primary flex items-center gap-2"
             >
               {submitting ? (
