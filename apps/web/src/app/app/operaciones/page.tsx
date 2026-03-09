@@ -23,7 +23,8 @@ import {
   Search,
   ChevronDown,
   AlertTriangle,
-  Mail
+  Mail,
+  Shield
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -192,6 +193,21 @@ export default function OperacionesPage() {
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // PayPal Identity verification states
+  const [paypalIdentityVerified, setPaypalIdentityVerified] = useState(false);
+  const [paypalVerifiedName, setPaypalVerifiedName] = useState('');
+  const [paypalNameMatch, setPaypalNameMatch] = useState(true);
+  const [verifyingPaypalIdentity, setVerifyingPaypalIdentity] = useState(false);
+
+  // User role & 2FA states for PayPal flow
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isUserAffiliate, setIsUserAffiliate] = useState(false);
+  const [userHas2FA, setUserHas2FA] = useState(false);
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [verifying2FA, setVerifying2FA] = useState(false);
+  const [twoFAError, setTwoFAError] = useState<string | null>(null);
+
   // PayPal commission calculator states
   const [paypalCalcMode, setPaypalCalcMode] = useState<'send' | 'receive'>('send');
   const [paypalReceiveAmount, setPaypalReceiveAmount] = useState<string>('');
@@ -356,11 +372,83 @@ export default function OperacionesPage() {
       if (accountsData) setUserAccounts(accountsData as unknown as UserBankAccount[]);
       if (banksData) setBanks(banksData);
       if (companyBanksData) setCompanyAccounts(companyBanksData);
+
+      // Load user profile for affiliate/2FA info
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('is_affiliate, two_factor_method, two_factor_verified')
+        .eq('id', user.id)
+        .single();
+
+      if (profileData) {
+        setCurrentUserId(user.id);
+        setIsUserAffiliate(profileData.is_affiliate || false);
+        setUserHas2FA(profileData.two_factor_method === 'totp' && profileData.two_factor_verified === true);
+      }
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Error al cargar los datos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // PayPal Identity verification — opens popup for "Log In with PayPal"
+  const verifyPaypalIdentity = async () => {
+    setVerifyingPaypalIdentity(true);
+    try {
+      localStorage.setItem('paypal_verify_userId', currentUserId);
+      const res = await fetch('/api/paypal/identity/authorize');
+      const { authUrl } = await res.json();
+      window.open(authUrl, 'paypal-identity', 'width=500,height=600,scrollbars=yes');
+    } catch (err) {
+      console.error('PayPal identity error:', err);
+      setVerifyingPaypalIdentity(false);
+    }
+  };
+
+  // Listen for PayPal Identity callback via postMessage
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'paypal-identity') return;
+      setVerifyingPaypalIdentity(false);
+      if (event.data.success && event.data.data) {
+        setPaypalIdentityVerified(true);
+        setPaypalVerifiedName(event.data.data.name || '');
+        setPaypalNameMatch(event.data.data.nameMatch !== false);
+        if (event.data.data.email) {
+          setPaypalEmail(event.data.data.email);
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // 2FA verification for affiliates
+  const verify2FACode = async (): Promise<boolean> => {
+    setVerifying2FA(true);
+    setTwoFAError(null);
+    try {
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: twoFACode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setTwoFAError('Código inválido. Intenta de nuevo.');
+        return false;
+      }
+      setShow2FAModal(false);
+      setTwoFACode('');
+      return true;
+    } catch (err) {
+      console.error('2FA verification error:', err);
+      setTwoFAError('Error al verificar el código.');
+      return false;
+    } finally {
+      setVerifying2FA(false);
     }
   };
 
@@ -1611,21 +1699,72 @@ export default function OperacionesPage() {
                           </div>
                         </div>
 
-                        {/* Instructions */}
+                        {/* Identity Verification — conditional by role */}
                         <div className="border-t border-white/20 pt-3">
-                          <div className="flex items-start gap-2 mb-3">
-                            <Info size={16} className="text-blue-300 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-white/80 leading-relaxed">
-                              Por políticas de seguridad, no aceptamos pagos directos por PayPal.
-                              Se te enviará una <strong className="text-white">solicitud de pago</strong> desde
-                              <strong className="text-white"> &quot;{selectedAccount.account_holder}&quot;</strong> a
-                              tu correo de PayPal para que la pagues voluntariamente.
-                            </p>
-                          </div>
-                        </div>
+                          {/* CLIENT NORMAL: "Log In with PayPal" identity verification */}
+                          {!isUserAffiliate && (
+                            <div className="mb-3">
+                              {!paypalIdentityVerified ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-start gap-2 mb-2">
+                                    <Shield size={14} className="text-yellow-300 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-white/70">
+                                      Para tu seguridad, verifica tu identidad con PayPal antes de continuar.
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={verifyPaypalIdentity}
+                                    disabled={verifyingPaypalIdentity}
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 bg-[#0070ba] hover:bg-[#005ea6] text-white"
+                                  >
+                                    {verifyingPaypalIdentity ? (
+                                      <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Verificando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z" /></svg>
+                                        Verificar con PayPal
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 p-3 bg-green-500/15 border border-green-400/30 rounded-lg mb-3">
+                                  <CheckCircle2 size={16} className="text-green-400 flex-shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-green-300 font-semibold">Identidad verificada</p>
+                                    <p className="text-[10px] text-green-300/70">{paypalVerifiedName}</p>
+                                  </div>
+                                  {!paypalNameMatch && (
+                                    <div className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 rounded text-[10px] text-amber-300">
+                                      <AlertTriangle size={10} />
+                                      Nombre diferente
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
-                        {/* PayPal email input */}
-                        <div className="border-t border-white/20 pt-3">
+                          {/* AFFILIATE: 2FA check */}
+                          {isUserAffiliate && !userHas2FA && (
+                            <div className="bg-amber-500/15 border border-amber-400/30 rounded-lg p-3 mb-3 flex items-start gap-2">
+                              <AlertCircle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-xs text-amber-300 font-semibold">2FA requerido</p>
+                                <p className="text-[10px] text-amber-200/70 mt-0.5">
+                                  Como afiliado, debes activar la autenticación de 2 factores en tu{' '}
+                                  <a href="/app/perfil" className="underline text-amber-200 hover:text-white">perfil</a>{' '}
+                                  antes de enviar solicitudes de pago.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PayPal email input */}
                           <label className="text-xs text-white/60 mb-1.5 block">Tu correo de PayPal *</label>
                           <div className="relative">
                             <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -1634,7 +1773,8 @@ export default function OperacionesPage() {
                               value={paypalEmail}
                               onChange={(e) => setPaypalEmail(e.target.value)}
                               placeholder="tu-email@ejemplo.com"
-                              className="w-full pl-9 pr-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+                              disabled={!isUserAffiliate && !paypalIdentityVerified}
+                              className="w-full pl-9 pr-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all disabled:opacity-40"
                             />
                           </div>
                           {paypalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail) && (
@@ -1647,6 +1787,16 @@ export default function OperacionesPage() {
                               type="button"
                               onClick={async () => {
                                 if (!paypalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail)) return;
+
+                                // Affiliate: require 2FA verification
+                                if (isUserAffiliate && userHas2FA) {
+                                  setShow2FAModal(true);
+                                  return;
+                                }
+
+                                // Client normal: must have verified PayPal identity
+                                if (!isUserAffiliate && !paypalIdentityVerified) return;
+
                                 setSendingPaypalInvoice(true);
                                 setPaypalInvoiceError(null);
                                 try {
@@ -1672,7 +1822,13 @@ export default function OperacionesPage() {
                                   setSendingPaypalInvoice(false);
                                 }
                               }}
-                              disabled={sendingPaypalInvoice || !paypalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail)}
+                              disabled={
+                                sendingPaypalInvoice ||
+                                !paypalEmail ||
+                                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail) ||
+                                (!isUserAffiliate && !paypalIdentityVerified) ||
+                                (isUserAffiliate && !userHas2FA)
+                              }
                               className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-yellow-500 hover:bg-yellow-400 text-gray-900"
                             >
                               {sendingPaypalInvoice ? (
@@ -2204,6 +2360,83 @@ export default function OperacionesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* 2FA Verification Modal for Affiliates */}
+      {show2FAModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Shield size={24} className="text-purple-600" />
+              <h3 className="text-lg font-bold text-gray-900">Verificación 2FA</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Ingresa el código de tu aplicación de autenticación para confirmar la solicitud de pago.
+            </p>
+            <input
+              type="text"
+              value={twoFACode}
+              onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              className="w-full text-center text-2xl font-mono tracking-[0.5em] px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors"
+              maxLength={6}
+              autoFocus
+            />
+            {twoFAError && (
+              <p className="text-xs text-red-500 mt-2 text-center">{twoFAError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => { setShow2FAModal(false); setTwoFACode(''); setTwoFAError(null); }}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  const valid = await verify2FACode();
+                  if (valid) {
+                    // Proceed to send invoice
+                    setSendingPaypalInvoice(true);
+                    setPaypalInvoiceError(null);
+                    try {
+                      const totalAmount = selectedBeneficiaries.reduce((sum, b) => sum + b.amountToSend, 0);
+                      const res = await fetch('/api/paypal/create-invoice', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          recipientEmail: paypalEmail,
+                          amount: totalAmount.toFixed(2),
+                          currencyCode: getCurrency(fromCurrencyId)?.code || 'USD',
+                          transactionNumber: `REQ-${Date.now()}`,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || 'Error al enviar solicitud');
+                      setPaypalInvoiceId(data.invoiceId);
+                      setPaypalInvoiceSent(true);
+                    } catch (err) {
+                      console.error('PayPal invoice error:', err);
+                      setPaypalInvoiceError(err instanceof Error ? err.message : 'Error al enviar la solicitud de pago');
+                    } finally {
+                      setSendingPaypalInvoice(false);
+                    }
+                  }
+                }}
+                disabled={verifying2FA || twoFACode.length !== 6}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-purple-600 text-white font-medium text-sm hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {verifying2FA ? (
+                  <>
+                    <Loader2 className="animate-spin" size={16} />
+                    Verificando...
+                  </>
+                ) : (
+                  'Confirmar'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
