@@ -16,9 +16,12 @@ import {
   Eye,
   EyeOff,
   Globe,
-  ChevronDown
+  ChevronDown,
+  Shield,
+  Smartphone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import SegundoFactorSetup from '@/app/panel/configuracion/components/SegundoFactorSetup';
 
 interface ProfileData {
   first_name: string;
@@ -214,6 +217,13 @@ export default function ProfilePage() {
   const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
 
+  // 2FA States
+  const [isAffiliate, setIsAffiliate] = useState(false);
+  const [twoFaMethod, setTwoFaMethod] = useState<string>('none');
+  const [twoFaVerified, setTwoFaVerified] = useState(false);
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [toggling2FA, setToggling2FA] = useState(false);
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -228,13 +238,27 @@ export default function ProfilePage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified, avatar_url')
+        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified, avatar_url, role, is_affiliate, two_factor_method, two_factor_verified')
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
       if (data) {
-        setFormData(data);
+        setFormData({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          email: data.email || '',
+          phone_number: data.phone_number || '',
+          country: data.country || '',
+          nationality: data.nationality || '',
+          document_type: data.document_type || '',
+          document_number: data.document_number || '',
+          is_kyc_verified: data.is_kyc_verified || false,
+          avatar_url: data.avatar_url || null,
+        });
+        setIsAffiliate(data.is_affiliate || false);
+        setTwoFaMethod(data.two_factor_method || 'none');
+        setTwoFaVerified(data.two_factor_verified || false);
 
         // Cargar avatar si existe
         if (data.avatar_url) {
@@ -261,6 +285,30 @@ export default function ProfilePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggle2FA = async () => {
+    setToggling2FA(true);
+    try {
+      const response = await fetch('/api/auth/2fa/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: twoFaMethod === 'totp' && twoFaVerified ? 'none' : 'totp'
+        })
+      });
+      if (!response.ok) throw new Error('Error toggling 2FA');
+      await loadProfile();
+    } catch (error) {
+      console.error('Error toggling 2FA:', error);
+    } finally {
+      setToggling2FA(false);
+    }
+  };
+
+  const handle2FASuccess = async () => {
+    setShow2FASetup(false);
+    await loadProfile();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -729,6 +777,102 @@ export default function ProfilePage() {
           </div>
         </div>
       </form>
+
+      {/* Seguridad — 2FA */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-indigo-50">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Shield size={20} className="text-purple-600" />
+            Seguridad — Autenticación de 2 Factores (2FA)
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">Protege tu cuenta con un código de verificación adicional.</p>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Affiliate mandatory warning */}
+          {isAffiliate && twoFaMethod === 'none' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-800 text-sm">2FA Obligatorio para Afiliados</p>
+                <p className="text-amber-700 text-xs mt-1">
+                  Como afiliado, debes activar la autenticación de 2 factores para poder enviar solicitudes de pago por PayPal.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Status */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="flex items-center gap-3">
+              <Smartphone size={20} className="text-gray-500" />
+              <div>
+                <p className="font-medium text-gray-800">Google Authenticator</p>
+                <p className="text-xs text-gray-500">
+                  {twoFaMethod === 'none' && 'No configurado'}
+                  {twoFaMethod === 'totp' && twoFaVerified && 'Activo'}
+                  {twoFaMethod === 'totp' && !twoFaVerified && 'Configurado — pendiente de verificación'}
+                </p>
+              </div>
+            </div>
+
+            {/* Status badge */}
+            {twoFaMethod === 'totp' && twoFaVerified ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <CheckCircle2 size={12} />
+                Activo
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+                Inactivo
+              </span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {twoFaMethod === 'none' ? (
+              <button
+                onClick={() => setShow2FASetup(true)}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors font-medium w-full sm:w-auto"
+              >
+                <Shield size={18} />
+                Configurar 2FA
+              </button>
+            ) : twoFaVerified ? (
+              <button
+                onClick={toggle2FA}
+                disabled={toggling2FA || (isAffiliate && twoFaMethod === 'totp')}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition-colors font-medium disabled:opacity-50 w-full sm:w-auto"
+                title={isAffiliate ? 'Los afiliados deben mantener 2FA activo' : 'Desactivar 2FA'}
+              >
+                {toggling2FA ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <Shield size={18} />
+                )}
+                {isAffiliate ? 'Obligatorio (Afiliado)' : 'Desactivar 2FA'}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShow2FASetup(true)}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors font-medium w-full sm:w-auto"
+              >
+                <Shield size={18} />
+                Completar configuración
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2FA Setup Modal */}
+      <SegundoFactorSetup
+        isOpen={show2FASetup}
+        onClose={() => setShow2FASetup(false)}
+        onSuccess={handle2FASuccess}
+        currentMethod={twoFaMethod as 'none' | 'email' | 'totp'}
+      />
     </div>
   );
 }
