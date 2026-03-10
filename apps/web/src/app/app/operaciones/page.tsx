@@ -24,9 +24,11 @@ import {
   ChevronDown,
   AlertTriangle,
   Mail,
-  Shield
+  Shield,
+  XCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { updateClientLastActivity } from '@/lib/client-session-config';
 
 interface Currency {
   id: number;
@@ -196,8 +198,9 @@ export default function OperacionesPage() {
   // PayPal Identity verification states
   const [paypalIdentityVerified, setPaypalIdentityVerified] = useState(false);
   const [paypalVerifiedName, setPaypalVerifiedName] = useState('');
-  const [paypalNameMatch, setPaypalNameMatch] = useState(true);
+
   const [verifyingPaypalIdentity, setVerifyingPaypalIdentity] = useState(false);
+  const [paypalIdentityError, setPaypalIdentityError] = useState<string | null>(null);
 
   // User role & 2FA states for PayPal flow
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -394,36 +397,144 @@ export default function OperacionesPage() {
   };
 
   // PayPal Identity verification — opens popup for "Log In with PayPal"
+  const paypalResultProcessed = useRef(false);
+
   const verifyPaypalIdentity = async () => {
     setVerifyingPaypalIdentity(true);
+    setPaypalIdentityError(null);
+    paypalResultProcessed.current = false;
     try {
-      localStorage.setItem('paypal_verify_userId', currentUserId);
-      const res = await fetch('/api/paypal/identity/authorize');
+      // Get userId — use state or fallback to Supabase session
+      let userId = currentUserId;
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id || '';
+      }
+      if (!userId) {
+        setPaypalIdentityError('No se pudo obtener tu usuario. Recarga la página e intenta de nuevo.');
+        setVerifyingPaypalIdentity(false);
+        return;
+      }
+      localStorage.setItem('paypal_verify_userId', userId);
+      localStorage.removeItem('paypal_identity_result');
+      // Clear any previous cookie
+      document.cookie = 'paypal_result=; path=/; max-age=0';
+      updateClientLastActivity();
+
+      const res = await fetch(`/api/paypal/identity/authorize?userId=${encodeURIComponent(userId)}`);
       const { authUrl } = await res.json();
-      window.open(authUrl, 'paypal-identity', 'width=500,height=600,scrollbars=yes');
+      const popup = window.open(authUrl, 'paypal-identity', 'width=500,height=600,scrollbars=yes');
+
+      // Helper: Apply the result to state
+      const applyResult = (result: { success?: boolean; error?: string; data?: Record<string, string | boolean> }) => {
+        if (paypalResultProcessed.current) return; // Already processed
+        paypalResultProcessed.current = true;
+        setVerifyingPaypalIdentity(false);
+
+        if (result.success && result.data) {
+          if (result.data.nameMatch === false) {
+            setPaypalIdentityVerified(false);
+            setPaypalIdentityError(
+              `El nombre de tu cuenta PayPal (${result.data.name}) no coincide con tu nombre registrado (${result.data.profileName}). Debes usar una cuenta PayPal a tu nombre.`
+            );
+          } else {
+            setPaypalIdentityError(null);
+            setPaypalIdentityVerified(true);
+            setPaypalVerifiedName(String(result.data.name || ''));
+            if (result.data.email) {
+              setPaypalEmail(String(result.data.email));
+            }
+          }
+        } else if (result.error === 'name_mismatch' && result.data) {
+          setPaypalIdentityVerified(false);
+          setPaypalIdentityError(
+            `El nombre de tu cuenta PayPal (${result.data.name}) no coincide con tu nombre registrado (${result.data.profileName}). Debes usar una cuenta PayPal a tu nombre.`
+          );
+        } else {
+          setPaypalIdentityVerified(false);
+        }
+      };
+
+      // Try to read result from any available channel
+      const tryReadResult = (): boolean => {
+        if (paypalResultProcessed.current) return true;
+
+        // Channel 1: localStorage
+        const lsResult = localStorage.getItem('paypal_identity_result');
+        if (lsResult) {
+          localStorage.removeItem('paypal_identity_result');
+          try {
+            applyResult(JSON.parse(lsResult));
+            return true;
+          } catch { /* continue to other channels */ }
+        }
+
+        // Channel 2: cookie
+        const cookieMatch = document.cookie.match(/paypal_result=([^;]+)/);
+        if (cookieMatch) {
+          document.cookie = 'paypal_result=; path=/; max-age=0';
+          try {
+            applyResult(JSON.parse(decodeURIComponent(cookieMatch[1])));
+            return true;
+          } catch { /* continue */ }
+        }
+
+        return false;
+      };
+
+      // Channel 3: postMessage listener
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type !== 'paypal-identity') return;
+        window.removeEventListener('message', handleMessage);
+        applyResult(event.data);
+      };
+      window.addEventListener('message', handleMessage);
+
+      // Poll every 500ms (faster than before)
+      const pollInterval = setInterval(() => {
+        updateClientLastActivity();
+
+        if (tryReadResult()) {
+          clearInterval(pollInterval);
+          window.removeEventListener('message', handleMessage);
+          window.removeEventListener('focus', handleFocus);
+          document.removeEventListener('visibilitychange', handleVisibility);
+          return;
+        }
+
+        if (!popup || popup.closed) {
+          clearInterval(pollInterval);
+          // Give one extra 500ms for result to arrive
+          setTimeout(() => {
+            if (!tryReadResult()) {
+              if (!paypalResultProcessed.current) {
+                paypalResultProcessed.current = true;
+                setVerifyingPaypalIdentity(false);
+              }
+            }
+            window.removeEventListener('message', handleMessage);
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleVisibility);
+          }, 500);
+        }
+      }, 500);
+
+      // Focus/visibility handlers — fire when main window regains focus
+      const handleFocus = () => {
+        setTimeout(() => tryReadResult(), 100); // Small delay to let localStorage sync
+      };
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          setTimeout(() => tryReadResult(), 100);
+        }
+      };
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibility);
     } catch (err) {
       console.error('PayPal identity error:', err);
       setVerifyingPaypalIdentity(false);
     }
   };
-
-  // Listen for PayPal Identity callback via postMessage
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type !== 'paypal-identity') return;
-      setVerifyingPaypalIdentity(false);
-      if (event.data.success && event.data.data) {
-        setPaypalIdentityVerified(true);
-        setPaypalVerifiedName(event.data.data.name || '');
-        setPaypalNameMatch(event.data.data.nameMatch !== false);
-        if (event.data.data.email) {
-          setPaypalEmail(event.data.data.email);
-        }
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
   // 2FA verification for affiliates
   const verify2FACode = async (): Promise<boolean> => {
@@ -1730,6 +1841,14 @@ export default function OperacionesPage() {
                                       </>
                                     )}
                                   </button>
+                                  {paypalIdentityError && (
+                                    <div className="mt-2 p-3 bg-red-500/15 border border-red-400/30 rounded-lg">
+                                      <div className="flex items-start gap-2">
+                                        <XCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                                        <p className="text-xs text-red-300">{paypalIdentityError}</p>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2 p-3 bg-green-500/15 border border-green-400/30 rounded-lg mb-3">
@@ -1738,12 +1857,6 @@ export default function OperacionesPage() {
                                     <p className="text-xs text-green-300 font-semibold">Identidad verificada</p>
                                     <p className="text-[10px] text-green-300/70">{paypalVerifiedName}</p>
                                   </div>
-                                  {!paypalNameMatch && (
-                                    <div className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 rounded text-[10px] text-amber-300">
-                                      <AlertTriangle size={10} />
-                                      Nombre diferente
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -1771,10 +1884,11 @@ export default function OperacionesPage() {
                             <input
                               type="email"
                               value={paypalEmail}
-                              onChange={(e) => setPaypalEmail(e.target.value)}
+                              onChange={(e) => !paypalIdentityVerified && setPaypalEmail(e.target.value)}
                               placeholder="tu-email@ejemplo.com"
                               disabled={!isUserAffiliate && !paypalIdentityVerified}
-                              className="w-full pl-9 pr-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all disabled:opacity-40"
+                              readOnly={!isUserAffiliate && paypalIdentityVerified}
+                              className={`w-full pl-9 pr-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all disabled:opacity-40 ${!isUserAffiliate && paypalIdentityVerified ? 'cursor-not-allowed opacity-70' : ''}`}
                             />
                           </div>
                           {paypalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paypalEmail) && (

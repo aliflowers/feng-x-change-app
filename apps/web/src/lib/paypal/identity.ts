@@ -108,11 +108,21 @@ export async function getUserInfo(accessToken: string): Promise<{
 
   const data = await response.json();
 
+  console.log('[PayPal getUserInfo] Raw response:', JSON.stringify(data, null, 2));
+
+  // PayPal may return name in different fields depending on sandbox/live
+  const givenName = data.given_name || '';
+  const familyName = data.family_name || '';
+  // Fallback: use 'name' field if given/family are empty
+  const fullName = (givenName && familyName)
+    ? `${givenName} ${familyName}`
+    : data.name || `${givenName}${familyName}`.trim();
+
   return {
     email: data.email || '',
-    name: data.name || '',
-    givenName: data.given_name || '',
-    familyName: data.family_name || '',
+    name: fullName,
+    givenName: givenName || fullName.split(' ')[0] || '',
+    familyName: familyName || fullName.split(' ').slice(1).join(' ') || '',
     payerId: data.payer_id || data.user_id || '',
   };
 }

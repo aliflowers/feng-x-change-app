@@ -4,18 +4,23 @@ import { getPaypalAuthUrl } from '@/lib/paypal/identity';
 /**
  * GET /api/paypal/identity/authorize
  * Generates the PayPal OAuth authorization URL.
- * Detects the host dynamically to support Ngrok and localhost.
+ * Accepts userId as query param and encodes it in the state parameter
+ * so the callback can extract it reliably.
  */
 export async function GET(request: Request) {
  try {
   const url = new URL(request.url);
+  const userId = url.searchParams.get('userId') || '';
+
   const origin = request.headers.get('origin') || request.headers.get('referer')
    ? new URL(request.headers.get('referer') || request.headers.get('origin') || '').origin
    : url.origin;
 
   // Use env var if set, otherwise build from origin
-  const redirectUri = process.env.PAYPAL_REDIRECT_URI || `${origin}/app/paypal-callback`;
-  const state = `pp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const redirectUri = process.env.PAYPAL_REDIRECT_URI || `${origin}/paypal-callback`;
+
+  // Encode userId in the state parameter so the callback can extract it
+  const state = `pp_${Date.now()}_${userId}`;
 
   const authUrl = getPaypalAuthUrl(state, redirectUri);
 

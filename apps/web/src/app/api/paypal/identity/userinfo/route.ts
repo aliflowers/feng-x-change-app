@@ -35,23 +35,35 @@ export async function POST(request: Request) {
   let nameMatch = true;
   let profileName = '';
 
+  console.log('[PayPal Identity] userId received:', userId, '| type:', typeof userId, '| truthy:', !!userId);
+  console.log('[PayPal Identity] PayPal user data:', { name: paypalUser.name, givenName: paypalUser.givenName, familyName: paypalUser.familyName, email: paypalUser.email });
+
   if (userId) {
-   const { data: profile } = await supabaseAdmin
+   const { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('first_name, last_name')
     .eq('id', userId)
     .single();
 
+   console.log('[PayPal Identity] Profile lookup result:', { profile, profileError });
+
    if (profile) {
     profileName = `${profile.first_name} ${profile.last_name}`.trim();
-    const paypalFullName = `${paypalUser.givenName} ${paypalUser.familyName}`.trim();
+    const paypalFullName = paypalUser.name;
     nameMatch = normalizeAndCompareNames(paypalFullName, profileName);
+    console.log('[PayPal Identity] Name comparison:', {
+     paypalFullName,
+     profileName,
+     nameMatch,
+    });
    }
+  } else {
+   console.log('[PayPal Identity] WARNING: No userId provided, skipping name comparison. nameMatch defaults to true!');
   }
 
   return NextResponse.json({
    email: paypalUser.email,
-   name: `${paypalUser.givenName} ${paypalUser.familyName}`.trim(),
+   name: paypalUser.name,
    givenName: paypalUser.givenName,
    familyName: paypalUser.familyName,
    payerId: paypalUser.payerId,
