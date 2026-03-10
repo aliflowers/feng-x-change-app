@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 
+// Desactivar Code Inspector al usar túneles (ngrok) o acceso externo
+const isCodeInspectorEnabled = !process.env.DISABLE_CODE_INSPECTOR;
+
 const nextConfig: NextConfig = {
  // Habilitar modo estricto de React
  reactStrictMode: true,
@@ -17,16 +20,21 @@ const nextConfig: NextConfig = {
  },
 
  // Configuración de Code Inspector para Turbopack y Webpack
- turbopack: {
-  rules: codeInspectorPlugin({
-   bundler: 'turbopack',
-   showSwitch: true,
-   openIn: 'reuse',
-  }) as any,
- },
+ // Se desactiva con DISABLE_CODE_INSPECTOR=true (ej. al usar ngrok)
+ ...(isCodeInspectorEnabled
+  ? {
+   turbopack: {
+    rules: codeInspectorPlugin({
+     bundler: 'turbopack',
+     showSwitch: true,
+     openIn: 'reuse',
+    }) as any,
+   },
+  }
+  : {}),
 
  webpack: (config, { dev, isServer }) => {
-  if (dev && !isServer) {
+  if (dev && !isServer && isCodeInspectorEnabled) {
    config.plugins.push(
     codeInspectorPlugin({
      bundler: 'webpack',

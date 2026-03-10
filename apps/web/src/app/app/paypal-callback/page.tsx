@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { Suspense } from 'react';
 
 function PaypalCallbackContent() {
  const searchParams = useSearchParams();
  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
  const [message, setMessage] = useState('Verificando tu cuenta PayPal...');
+ const processedCode = useRef<string | null>(null);
 
  useEffect(() => {
   const code = searchParams.get('code');
@@ -32,6 +32,9 @@ function PaypalCallbackContent() {
 
   // Exchange code for user info via our API
   const verifyIdentity = async () => {
+   if (processedCode.current === code) return;
+   processedCode.current = code;
+
    try {
     // Get userId from localStorage (set by the opener)
     const userId = localStorage.getItem('paypal_verify_userId') || '';
