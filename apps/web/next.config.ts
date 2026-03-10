@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 
 // Desactivar Code Inspector al usar túneles (ngrok) o acceso externo
-const isCodeInspectorEnabled = !process.env.DISABLE_CODE_INSPECTOR;
+const isCodeInspectorEnabled = process.env.DISABLE_CODE_INSPECTOR !== 'true';
 
 const nextConfig: NextConfig = {
  // Habilitar modo estricto de React

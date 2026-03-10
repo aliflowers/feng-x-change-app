@@ -430,7 +430,7 @@ export default function OperacionesPage() {
     setVerifying2FA(true);
     setTwoFAError(null);
     try {
-      const res = await fetch('/api/auth/2fa/verify', {
+      const res = await fetch('/api/auth/2fa/verify-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: twoFACode }),
