@@ -31,6 +31,9 @@ interface BankPlatform {
   current_balance: number;
   is_active: boolean;
   bank_code: string | null;
+  pago_movil_phone: string | null;
+  pago_movil_ci: string | null;
+  display_methods: string;
   created_at: string;
   updated_at: string;
   currency?: {
@@ -246,6 +249,9 @@ export default function BancosPage() {
     account_holder: '',
     current_balance: '',
     bank_code: '',
+    pago_movil_phone: '',
+    pago_movil_ci: '',
+    display_methods: 'TRANSFER',
     is_active: true
   });
 
@@ -288,6 +294,9 @@ export default function BancosPage() {
           current_balance,
           is_active,
           bank_code,
+          pago_movil_phone,
+          pago_movil_ci,
+          display_methods,
           created_at,
           updated_at,
           currency:currencies(id, code, symbol, name)
@@ -373,6 +382,9 @@ export default function BancosPage() {
       account_holder: '',
       current_balance: '',
       bank_code: '',
+      pago_movil_phone: '',
+      pago_movil_ci: '',
+      display_methods: 'TRANSFER',
       is_active: true
     });
     setMessage(null);
@@ -399,6 +411,9 @@ export default function BancosPage() {
       account_holder: bank.account_holder,
       current_balance: bank.current_balance.toString(),
       bank_code: bank.bank_code || '',
+      pago_movil_phone: bank.pago_movil_phone || '',
+      pago_movil_ci: bank.pago_movil_ci || '',
+      display_methods: bank.display_methods || 'TRANSFER',
       is_active: bank.is_active
     });
     setMessage(null);
@@ -419,6 +434,9 @@ export default function BancosPage() {
         account_holder: formData.account_holder,
         current_balance: parseFloat(formData.current_balance) || 0,
         bank_code: formData.bank_code || null,
+        pago_movil_phone: formData.pago_movil_phone || null,
+        pago_movil_ci: formData.pago_movil_ci || null,
+        display_methods: formData.display_methods || 'TRANSFER',
         is_active: formData.is_active,
         updated_at: new Date().toISOString()
       };
@@ -959,10 +977,81 @@ export default function BancosPage() {
                 </select>
               </div>
 
-              {/* Payment Method - Only for BANK type with multiple methods */}
+              {/* Payment Method - For BANK type with non-VES currencies that have multiple methods */}
               {formData.type === 'BANK' && formData.currency_id && (() => {
                 const currency = currencies.find(c => c.id.toString() === formData.currency_id);
-                const methods = currency ? PAYMENT_METHODS_BY_CURRENCY[currency.code] : null;
+                if (!currency) return null;
+
+                // VES: No payment method dropdown, instead show integrated Pago Móvil section
+                if (currency.code === 'VES') {
+                  return (
+                    <>
+                      {/* Pago Móvil Section */}
+                      <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📱</span>
+                          <h4 className="font-semibold text-purple-800 text-sm">Datos de Pago Móvil (opcional)</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              N° de Teléfono
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.pago_movil_phone}
+                              onChange={(e) => setFormData({ ...formData, pago_movil_phone: e.target.value })}
+                              className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                              placeholder="0412-1234567"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              Cédula de Identidad
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.pago_movil_ci}
+                              onChange={(e) => setFormData({ ...formData, pago_movil_ci: e.target.value })}
+                              className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                              placeholder="V-12345678"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Display Methods Selector */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Mostrar al cliente *
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { value: 'TRANSFER', label: '🏦 Transferencia' },
+                            { value: 'PAGO_MOVIL', label: '📱 Pago Móvil' },
+                            { value: 'BOTH', label: '🔄 Ambos' },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, display_methods: opt.value })}
+                              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${formData.display_methods === opt.value
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200'
+                                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">Elige qué datos de pago ve el cliente al crear una operación</p>
+                      </div>
+                    </>
+                  );
+                }
+
+                // Non-VES currencies with multiple methods
+                const methods = PAYMENT_METHODS_BY_CURRENCY[currency.code];
                 if (methods && methods.length > 1) {
                   return (
                     <div>

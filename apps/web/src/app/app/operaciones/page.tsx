@@ -81,6 +81,9 @@ interface CompanyBankAccount {
   account_number: string;
   account_holder: string;
   bank_code: string | null;
+  pago_movil_phone: string | null;
+  pago_movil_ci: string | null;
+  display_methods: string;
 }
 
 interface SelectedBeneficiary {
@@ -366,7 +369,7 @@ export default function OperacionesPage() {
       // Load company bank accounts (banks_platforms) for deposit info
       const { data: companyBanksData } = await supabase
         .from('banks_platforms')
-        .select('id, name, type, currency_id, account_number, account_holder, bank_code')
+        .select('id, name, type, currency_id, account_number, account_holder, bank_code, pago_movil_phone, pago_movil_ci, display_methods')
         .eq('is_active', true)
         .order('name');
 
@@ -2018,6 +2021,12 @@ export default function OperacionesPage() {
                   }
 
                   // Standard bank/platform UI (non-PayPal)
+                  // Check if this is a VES bank with display_methods config
+                  const isVesBank = currencies.find(c => c.id === selectedAccount.currency_id)?.code === 'VES' && selectedAccount.type === 'BANK';
+                  const displayMethods = (selectedAccount as CompanyBankAccount).display_methods || 'TRANSFER';
+                  const showTransfer = !isVesBank || displayMethods === 'TRANSFER' || displayMethods === 'BOTH';
+                  const showPagoMovil = isVesBank && (displayMethods === 'PAGO_MOVIL' || displayMethods === 'BOTH') && selectedAccount.pago_movil_phone;
+
                   return (
                     <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm space-y-3">
                       {/* Bank/Platform name with logo */}
@@ -2049,44 +2058,96 @@ export default function OperacionesPage() {
                         <p className="font-semibold text-white">{selectedAccount.account_holder}</p>
                       </div>
 
-                      {/* Account number with copy button */}
-                      <div className="border-t border-white/20 pt-3">
-                        <p className="text-xs text-white/60 mb-0.5">Cuenta / Identificador</p>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono font-semibold text-white break-all">{selectedAccount.account_number}</p>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(selectedAccount.account_number, 'account')}
-                            className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                            title="Copiar"
-                          >
-                            {copiedField === 'account' ? (
-                              <CheckCircle className="text-green-300" size={16} />
-                            ) : (
-                              <Copy className="text-white/70" size={16} />
-                            )}
-                          </button>
-                        </div>
-                      </div>
+                      {/* Transfer Data */}
+                      {showTransfer && (
+                        <>
+                          {/* Account number with copy button */}
+                          <div className="border-t border-white/20 pt-3">
+                            <p className="text-xs text-white/60 mb-0.5">
+                              {showPagoMovil ? '🏦 Transferencia — Cuenta' : 'Cuenta / Identificador'}
+                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-mono font-semibold text-white break-all">{selectedAccount.account_number}</p>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(selectedAccount.account_number, 'account')}
+                                className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                                title="Copiar"
+                              >
+                                {copiedField === 'account' ? (
+                                  <CheckCircle className="text-green-300" size={16} />
+                                ) : (
+                                  <Copy className="text-white/70" size={16} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
 
-                      {/* Bank code if exists */}
-                      {selectedAccount.bank_code && (
-                        <div className="border-t border-white/20 pt-3">
-                          <p className="text-xs text-white/60 mb-0.5">Código del Banco</p>
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-mono font-semibold text-white">{selectedAccount.bank_code}</p>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(selectedAccount.bank_code!, 'bankcode')}
-                              className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                              title="Copiar"
-                            >
-                              {copiedField === 'bankcode' ? (
-                                <CheckCircle className="text-green-300" size={16} />
-                              ) : (
-                                <Copy className="text-white/70" size={16} />
-                              )}
-                            </button>
+                          {/* Bank code if exists */}
+                          {selectedAccount.bank_code && (
+                            <div className="border-t border-white/20 pt-3">
+                              <p className="text-xs text-white/60 mb-0.5">Código del Banco</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-mono font-semibold text-white">{selectedAccount.bank_code}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(selectedAccount.bank_code!, 'bankcode')}
+                                  className="flex-shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                                  title="Copiar"
+                                >
+                                  {copiedField === 'bankcode' ? (
+                                    <CheckCircle className="text-green-300" size={16} />
+                                  ) : (
+                                    <Copy className="text-white/70" size={16} />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Pago Móvil Data */}
+                      {showPagoMovil && (
+                        <div className={`${showTransfer ? 'bg-purple-500/20 rounded-lg p-3 border border-purple-400/30' : 'border-t border-white/20 pt-3'} space-y-2`}>
+                          <p className="text-xs font-semibold text-purple-200">📱 Pago Móvil</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <p className="text-[10px] text-white/60 mb-0.5">Teléfono</p>
+                              <div className="flex items-center gap-1">
+                                <p className="font-mono font-semibold text-white text-sm">{selectedAccount.pago_movil_phone}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(selectedAccount.pago_movil_phone!, 'pmphone')}
+                                  className="flex-shrink-0 p-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                                  title="Copiar"
+                                >
+                                  {copiedField === 'pmphone' ? (
+                                    <CheckCircle className="text-green-300" size={12} />
+                                  ) : (
+                                    <Copy className="text-white/70" size={12} />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-white/60 mb-0.5">Cédula</p>
+                              <div className="flex items-center gap-1">
+                                <p className="font-mono font-semibold text-white text-sm">{selectedAccount.pago_movil_ci}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(selectedAccount.pago_movil_ci!, 'pmci')}
+                                  className="flex-shrink-0 p-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                                  title="Copiar"
+                                >
+                                  {copiedField === 'pmci' ? (
+                                    <CheckCircle className="text-green-300" size={12} />
+                                  ) : (
+                                    <Copy className="text-white/70" size={12} />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
