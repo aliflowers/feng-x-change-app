@@ -10,7 +10,8 @@ import {
  Clock,
  Sparkles,
  ChevronRight,
- CheckCircle2
+ CheckCircle2,
+ AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -307,6 +308,7 @@ export default function ClientDashboard() {
          const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
           POOL: { label: 'En Proceso', color: 'text-amber-600 bg-amber-50', icon: <Clock size={12} /> },
           TAKEN: { label: 'En Proceso', color: 'text-amber-600 bg-amber-50', icon: <Clock size={12} /> },
+          ERROR: { label: 'Error en datos', color: 'text-rose-700 bg-rose-100', icon: <AlertTriangle size={12} /> },
           COMPLETED: { label: 'Completado', color: 'text-green-600 bg-green-50', icon: <CheckCircle2 size={12} /> },
           REJECTED: { label: 'Rechazado', color: 'text-red-600 bg-red-50', icon: <History size={12} /> },
          };

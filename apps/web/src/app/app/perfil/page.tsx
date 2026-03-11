@@ -16,9 +16,12 @@ import {
   Eye,
   EyeOff,
   Globe,
-  ChevronDown
+  ChevronDown,
+  Shield,
+  Smartphone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import SegundoFactorSetup from '@/app/panel/configuracion/components/SegundoFactorSetup';
 
 interface ProfileData {
   first_name: string;
@@ -29,6 +32,8 @@ interface ProfileData {
   nationality: string | null;
   document_type: string | null;
   document_number: string | null;
+  is_kyc_verified: boolean;
+  avatar_url: string | null;
 }
 
 const documentTypes = [
@@ -184,6 +189,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<ProfileData>({
     first_name: '',
@@ -194,6 +200,8 @@ export default function ProfilePage() {
     nationality: '',
     document_type: '',
     document_number: '',
+    is_kyc_verified: false,
+    avatar_url: null,
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -209,6 +217,13 @@ export default function ProfilePage() {
   const [showNationalityDropdown, setShowNationalityDropdown] = useState(false);
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
 
+  // 2FA States
+  const [isAffiliate, setIsAffiliate] = useState(false);
+  const [twoFaMethod, setTwoFaMethod] = useState<string>('none');
+  const [twoFaVerified, setTwoFaVerified] = useState(false);
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [toggling2FA, setToggling2FA] = useState(false);
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -223,13 +238,42 @@ export default function ProfilePage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number')
+        .select('first_name, last_name, email, phone_number, country, nationality, document_type, document_number, is_kyc_verified, avatar_url, role, is_affiliate, two_factor_method, two_factor_verified')
         .eq('id', user.id)
         .single();
 
       if (error) throw error;
       if (data) {
-        setFormData(data);
+        setFormData({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          email: data.email || '',
+          phone_number: data.phone_number || '',
+          country: data.country || '',
+          nationality: data.nationality || '',
+          document_type: data.document_type || '',
+          document_number: data.document_number || '',
+          is_kyc_verified: data.is_kyc_verified || false,
+          avatar_url: data.avatar_url || null,
+        });
+        setIsAffiliate(data.is_affiliate || false);
+        setTwoFaMethod(data.two_factor_method || 'none');
+        setTwoFaVerified(data.two_factor_verified || false);
+
+        // Cargar avatar si existe
+        if (data.avatar_url) {
+          if (data.avatar_url.startsWith('http')) {
+            setAvatarUrl(data.avatar_url);
+          } else {
+            const { data: signedData, error: signedError } = await supabase.storage
+              .from('kyc')
+              .createSignedUrl(data.avatar_url, 3600);
+
+            if (!signedError && signedData) {
+              setAvatarUrl(signedData.signedUrl);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -241,6 +285,30 @@ export default function ProfilePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggle2FA = async () => {
+    setToggling2FA(true);
+    try {
+      const response = await fetch('/api/auth/2fa/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: twoFaMethod === 'totp' && twoFaVerified ? 'none' : 'totp'
+        })
+      });
+      if (!response.ok) throw new Error('Error toggling 2FA');
+      await loadProfile();
+    } catch (error) {
+      console.error('Error toggling 2FA:', error);
+    } finally {
+      setToggling2FA(false);
+    }
+  };
+
+  const handle2FASuccess = async () => {
+    setShow2FASetup(false);
+    await loadProfile();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -335,9 +403,29 @@ export default function ProfilePage() {
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
-        <p className="text-gray-500">Administra tu información personal y configuración de cuenta.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
+          <p className="text-gray-500">Administra tu información personal y configuración de cuenta.</p>
+        </div>
+
+        {/* Badge de verificación KYC */}
+        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${formData.is_kyc_verified
+          ? 'bg-green-100 text-green-700 border border-green-200'
+          : 'bg-amber-100 text-amber-700 border border-amber-200'
+          }`}>
+          {formData.is_kyc_verified ? (
+            <>
+              <CheckCircle2 size={16} />
+              <span>Identidad Verificada</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle size={16} />
+              <span>Verificación Pendiente</span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Formulario de Datos Personales */}
@@ -351,6 +439,28 @@ export default function ProfilePage() {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Avatar del Cliente */}
+          <div className="flex justify-center -mt-3 mb-6">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold transition-transform group-hover:scale-105">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Perfil"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{formData.first_name?.[0]}{formData.last_name?.[0]}</span>
+                )}
+              </div>
+              {formData.is_kyc_verified && (
+                <div className="absolute -bottom-1 -right-1 bg-green-500 text-white p-1.5 rounded-full border-2 border-white shadow-sm" title="Identidad Verificada">
+                  <CheckCircle2 size={16} />
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Nombres */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -422,8 +532,9 @@ export default function ProfilePage() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowNationalityDropdown(!showNationalityDropdown)}
-                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
+                  onClick={() => !formData.is_kyc_verified && setShowNationalityDropdown(!showNationalityDropdown)}
+                  disabled={formData.is_kyc_verified}
+                  className={`input w-full flex items-center gap-3 text-left ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {formData.nationality ? (
                     <>
@@ -470,8 +581,9 @@ export default function ProfilePage() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-                  className="input w-full flex items-center gap-3 text-left cursor-pointer"
+                  onClick={() => !formData.is_kyc_verified && setShowCountryDropdown(!showCountryDropdown)}
+                  disabled={formData.is_kyc_verified}
+                  className={`input w-full flex items-center gap-3 text-left ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {formData.country ? (
                     <>
@@ -522,7 +634,8 @@ export default function ProfilePage() {
                   name="document_type"
                   value={formData.document_type || ''}
                   onChange={handleChange}
-                  className="input appearance-none pl-10"
+                  disabled={formData.is_kyc_verified}
+                  className={`input appearance-none pl-10 ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Selecciona tipo</option>
                   {documentTypes.map(dt => (
@@ -540,7 +653,8 @@ export default function ProfilePage() {
                   name="document_number"
                   value={formData.document_number || ''}
                   onChange={handleChange}
-                  className="input pl-10"
+                  disabled={formData.is_kyc_verified}
+                  className={`input pl-10 ${formData.is_kyc_verified ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                   placeholder="V12345678"
                 />
                 <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -663,6 +777,102 @@ export default function ProfilePage() {
           </div>
         </div>
       </form>
+
+      {/* Seguridad — 2FA */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-indigo-50">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Shield size={20} className="text-purple-600" />
+            Seguridad — Autenticación de 2 Factores (2FA)
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">Protege tu cuenta con un código de verificación adicional.</p>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Affiliate mandatory warning */}
+          {isAffiliate && twoFaMethod === 'none' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-800 text-sm">2FA Obligatorio para Afiliados</p>
+                <p className="text-amber-700 text-xs mt-1">
+                  Como afiliado, debes activar la autenticación de 2 factores para poder enviar solicitudes de pago por PayPal.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Status */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="flex items-center gap-3">
+              <Smartphone size={20} className="text-gray-500" />
+              <div>
+                <p className="font-medium text-gray-800">Google Authenticator</p>
+                <p className="text-xs text-gray-500">
+                  {twoFaMethod === 'none' && 'No configurado'}
+                  {twoFaMethod === 'totp' && twoFaVerified && 'Activo'}
+                  {twoFaMethod === 'totp' && !twoFaVerified && 'Configurado — pendiente de verificación'}
+                </p>
+              </div>
+            </div>
+
+            {/* Status badge */}
+            {twoFaMethod === 'totp' && twoFaVerified ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <CheckCircle2 size={12} />
+                Activo
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+                Inactivo
+              </span>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {twoFaMethod === 'none' ? (
+              <button
+                onClick={() => setShow2FASetup(true)}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors font-medium w-full sm:w-auto"
+              >
+                <Shield size={18} />
+                Configurar 2FA
+              </button>
+            ) : twoFaVerified ? (
+              <button
+                onClick={toggle2FA}
+                disabled={toggling2FA || (isAffiliate && twoFaMethod === 'totp')}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition-colors font-medium disabled:opacity-50 w-full sm:w-auto"
+                title={isAffiliate ? 'Los afiliados deben mantener 2FA activo' : 'Desactivar 2FA'}
+              >
+                {toggling2FA ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <Shield size={18} />
+                )}
+                {isAffiliate ? 'Obligatorio (Afiliado)' : 'Desactivar 2FA'}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShow2FASetup(true)}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors font-medium w-full sm:w-auto"
+              >
+                <Shield size={18} />
+                Completar configuración
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2FA Setup Modal */}
+      <SegundoFactorSetup
+        isOpen={show2FASetup}
+        onClose={() => setShow2FASetup(false)}
+        onSuccess={handle2FASuccess}
+        currentMethod={twoFaMethod as 'none' | 'email' | 'totp'}
+      />
     </div>
   );
 }

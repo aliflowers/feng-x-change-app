@@ -129,8 +129,7 @@ export default function PanelLayout({
       if (profileData) {
         // Verificar que sea un rol interno
         if (!['SUPER_ADMIN', 'ADMIN', 'CAJERO', 'SUPERVISOR'].includes(profileData.role)) {
-          await supabase.auth.signOut();
-          router.push('/backoffice');
+          router.push('/app');
           return;
         }
         setProfile(profileData as UserProfile);

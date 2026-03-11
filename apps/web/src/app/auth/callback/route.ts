@@ -1,30 +1,56 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server-cookies';
 
-export async function GET(request: Request) {
+import { type NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+/**
+ * GET /auth/callback
+ * 
+ * Este endpoint maneja el retorno del flujo de autenticación (PKCE)
+ * desde los enlaces de email de Supabase.
+ * 
+ * 1. Recibe un código de intercambio `code`.
+ * 2. Intercambia el código por una sesión activa.
+ * 3. Redirige al usuario a la página de destino (login o dashboard).
+ */
+export async function GET(request: NextRequest) {
  const { searchParams, origin } = new URL(request.url);
  const code = searchParams.get('code');
- // if "next" is in param, use it as the redirect URL
- const next = searchParams.get('next') ?? '/app';
+ // Si no hay "next", por defecto enviamos al login con mensaje de éxito
+ const next = searchParams.get('next') ?? '/login?verified=true';
 
  if (code) {
-  const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (!error) {
-   const forwardedHost = request.headers.get('x-forwarded-host'); // original origin before load balancer
-   const isLocalEnv = process.env.NODE_ENV === 'development';
+  const cookieStore = await cookies();
 
-   if (isLocalEnv) {
-    // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-    return NextResponse.redirect(`${origin}${next}`);
-   } else if (forwardedHost) {
-    return NextResponse.redirect(`https://${forwardedHost}${next}`);
-   } else {
-    return NextResponse.redirect(`${origin}${next}`);
+  const supabase = createServerClient(
+   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+   {
+    cookies: {
+     get(name: string) {
+      return cookieStore.get(name)?.value;
+     },
+     set(name: string, value: string, options: any) {
+      cookieStore.set({ name, value, ...options });
+     },
+     remove(name: string, options: any) {
+      cookieStore.set({ name, value: '', ...options });
+     },
+    },
    }
+  );
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (!error) {
+   // Si el intercambio es exitoso, redirigir a la página deseada
+   // Usamos el origin del request para asegurar la ruta absoluta correcta
+   return NextResponse.redirect(`${origin}${next}`);
+  } else {
+   console.error('Auth Callback Error:', error);
   }
  }
 
- // return the user to an error page with instructions
- return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+ // Si no hay código o falla el intercambio, redirigir a login con error
+ return NextResponse.redirect(`${origin}/login?error=auth_code_error`);
 }

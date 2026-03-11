@@ -1,0 +1,246 @@
+
+--- Probando lista: https://verification.didit.me/v3/sessions ---
+Status: 200
+Obtained validSessionId from initial list: cb82c298-2564-492e-8f28-4a9307a5107d
+
+--- 3. Probando filtrado e inspección profunda ---
+GET https://verification.didit.me/v3/sessions?session_id=cb82c298-2564-492e-8f28-4a9307a5107d...
+✅ Sesión encontrada.
+--- FEATURES ---
+[
+  {
+    "feature": "ID_VERIFICATION",
+    "status": "Not Finished"
+  },
+  {
+    "feature": "LIVENESS",
+    "status": "Not Finished"
+  },
+  {
+    "feature": "FACE_MATCH",
+    "status": "Not Finished"
+  },
+  {
+    "feature": "IP_ANALYSIS",
+    "status": "Not Finished"
+  }
+]
+--- ADDITIONAL DETAILS ---
+null
+--- FULL NAME ---
+null
+
+--- 3. Probando Diferentes Base URLs (Listar + Detalle) ---
+
+------------------------------------------------
+Testing Base URL: https://verification.didit.me/v3
+Listing: https://verification.didit.me/v3/sessions?limit=1
+List Status: 200
+✅ ID encontrado en lista: cb82c298-2564-492e-8f28-4a9307a5107d
+Sample item keys: [
+  'session_id',
+  'session_number',
+  'session_url',
+  'portrait_image',
+  'document_type',
+  'full_name',
+  'country',
+  'status',
+  'vendor_data',
+  'created_at',
+  'features',
+  'phone_number',
+  'email_address',
+  'additional_details'
+]
+Fetching Detail: https://verification.didit.me/v3/sessions/cb82c298-2564-492e-8f28-4a9307a5107d
+Detail Status: 404
+Detail Error: 
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not Found</title>
+</head>
+<body>
+  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>
+</body>
+</html>
+
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v2
+Listing: https://apx.didit.me/v2/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v3
+Listing: https://apx.didit.me/v3/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v2
+Listing: https://api.didit.me/v2/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v3
+Listing: https://api.didit.me/v3/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+
+--- Probando lista: https://verification.didit.me/v3/verification-sessions ---
+Status: 404
+
+--- 3. Probando filtrado e inspección profunda ---
+
+--- 3. Probando Diferentes Base URLs (Listar + Detalle) ---
+
+------------------------------------------------
+Testing Base URL: https://verification.didit.me/v3
+Listing: https://verification.didit.me/v3/sessions?limit=1
+List Status: 200
+✅ ID encontrado en lista: cb82c298-2564-492e-8f28-4a9307a5107d
+Sample item keys: [
+  'session_id',
+  'session_number',
+  'session_url',
+  'portrait_image',
+  'document_type',
+  'full_name',
+  'country',
+  'status',
+  'vendor_data',
+  'created_at',
+  'features',
+  'phone_number',
+  'email_address',
+  'additional_details'
+]
+Fetching Detail: https://verification.didit.me/v3/sessions/cb82c298-2564-492e-8f28-4a9307a5107d
+Detail Status: 404
+Detail Error: 
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not Found</title>
+</head>
+<body>
+  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>
+</body>
+</html>
+
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v2
+Listing: https://apx.didit.me/v2/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v3
+Listing: https://apx.didit.me/v3/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v2
+Listing: https://api.didit.me/v2/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v3
+Listing: https://api.didit.me/v3/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+Error: 
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not Found</title>
+</head>
+<body>
+  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>
+</body>
+</html>
+
+
+--- Probando lista: https://verification.didit.me/v3/verifications ---
+Status: 404
+
+--- 3. Probando filtrado e inspección profunda ---
+
+--- 3. Probando Diferentes Base URLs (Listar + Detalle) ---
+
+------------------------------------------------
+Testing Base URL: https://verification.didit.me/v3
+Listing: https://verification.didit.me/v3/sessions?limit=1
+List Status: 200
+✅ ID encontrado en lista: cb82c298-2564-492e-8f28-4a9307a5107d
+Sample item keys: [
+  'session_id',
+  'session_number',
+  'session_url',
+  'portrait_image',
+  'document_type',
+  'full_name',
+  'country',
+  'status',
+  'vendor_data',
+  'created_at',
+  'features',
+  'phone_number',
+  'email_address',
+  'additional_details'
+]
+Fetching Detail: https://verification.didit.me/v3/sessions/cb82c298-2564-492e-8f28-4a9307a5107d
+Detail Status: 404
+Detail Error: 
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not Found</title>
+</head>
+<body>
+  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>
+</body>
+</html>
+
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v2
+Listing: https://apx.didit.me/v2/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://apx.didit.me/v3
+Listing: https://apx.didit.me/v3/sessions?limit=1
+List Status: 443
+List Error: { "message": "Not Found" }
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v2
+Listing: https://api.didit.me/v2/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+
+------------------------------------------------
+Testing Base URL: https://api.didit.me/v3
+Listing: https://api.didit.me/v3/sessions?limit=1
+List Status: 401
+List Error: {"detail": "You must be authenticated with a valid access token to access this endpoint."}
+Error: 
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Not Found</title>
+</head>
+<body>
+  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>
+</body>
+</html>
+

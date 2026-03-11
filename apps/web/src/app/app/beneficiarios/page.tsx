@@ -12,13 +12,6 @@ interface ExtendedUserBankAccount extends UserBankAccount {
     name: string;
     currency_code: string;
   } | null;
-  // Backward compatibility with old records
-  banks_platforms?: {
-    name: string;
-    currencies?: {
-      code: string;
-    }
-  } | null;
 }
 
 // Mapeo de logos de bancos/plataformas usando Clearbit Logo API
@@ -91,12 +84,6 @@ export default function BeneficiariesPage() {
          bank:banks (
            name,
            currency_code
-         ),
-         banks_platforms (
-           name,
-           currencies (
-             code
-           )
          )
        `)
         .eq('user_id', user.id)
@@ -193,8 +180,8 @@ export default function BeneficiariesPage() {
         // Vista de Tarjetas
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {beneficiaries.map((acc) => {
-            const bankName = acc.bank?.name || acc.banks_platforms?.name || 'Sin banco';
-            const currencyCode = acc.bank?.currency_code || acc.banks_platforms?.currencies?.code || '';
+            const bankName = acc.bank?.name || 'Sin banco';
+            const currencyCode = acc.bank?.currency_code || '';
             return (
               <div key={acc.id} className="group relative bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 hover:border-blue-300">
                 <div className="flex justify-between items-start mb-5">
@@ -220,11 +207,19 @@ export default function BeneficiariesPage() {
                       }`}>
                       <Building2 size={28} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <h4 className="text-lg font-bold text-gray-900 leading-tight">{bankName}</h4>
-                      <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                        {currencyCode}
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                          {currencyCode}
+                        </span>
+                        <Link
+                          href={`/app/operaciones?beneficiaryId=${acc.id}`}
+                          className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm transition-colors"
+                        >
+                          Enviar
+                        </Link>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -285,8 +280,8 @@ export default function BeneficiariesPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {beneficiaries.map((acc) => {
-                  const bankName = acc.bank?.name || acc.banks_platforms?.name || 'Sin banco';
-                  const currencyCode = acc.bank?.currency_code || acc.banks_platforms?.currencies?.code || '';
+                  const bankName = acc.bank?.name || 'Sin banco';
+                  const currencyCode = acc.bank?.currency_code || '';
                   return (
                     <tr key={acc.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
@@ -321,6 +316,13 @@ export default function BeneficiariesPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={`/app/operaciones?beneficiaryId=${acc.id}`}
+                            className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+                            title="Enviar"
+                          >
+                            Enviar
+                          </Link>
                           <Link
                             href={`/app/beneficiarios/${acc.id}`}
                             className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition-colors"

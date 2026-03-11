@@ -1,0 +1,14 @@
+Searching for Session: e1a58fe1-e6a4-4151-bac2-e9582616b901
+
+Checking APX V2 (Configured)...
+❌ Status: 443
+---
+Checking APX V3...
+❌ Status: 443
+---
+Checking Verification V3 (Direct)...
+❌ Status: 404
+---
+Checking Verification V3 (List Search)...
+❌ Status: 301
+---

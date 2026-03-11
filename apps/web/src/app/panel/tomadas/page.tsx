@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   Loader2,
   X,
-  FileText
+  FileText,
+  Building2
 } from 'lucide-react';
 
 interface TakenOperation {
@@ -27,16 +28,30 @@ interface TakenOperation {
   status: string;
   created_at: string;
   taken_at: string;
-  from_currency: { code: string; symbol: string };
-  to_currency: { code: string; symbol: string };
+  from_currency: { id: number; code: string; symbol: string };
+  to_currency: { id: number; code: string; symbol: string };
   user: { first_name: string; last_name: string; email: string };
   user_bank_account: {
     account_holder: string;
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { name: string };
+    bank: { name: string } | null;
   } | null;
+}
+
+interface CompanyBank {
+  id: number;
+  name: string;
+  type: 'BANK' | 'PLATFORM';
+  account_number: string;
+  account_holder: string;
+  current_balance: number;
+  currency_id: number;
+  display_methods: string;
+  pago_movil_phone: string | null;
+  pago_movil_ci: string | null;
+  currency?: { id: number; code: string; symbol: string };
 }
 
 export default function TomadasPage() {
@@ -62,6 +77,12 @@ export default function TomadasPage() {
 
   // Error form
   const [errorNote, setErrorNote] = useState('');
+
+  // Company bank selection for payment
+  const [companyBanks, setCompanyBanks] = useState<CompanyBank[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
+  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'PAGO_MOVIL'>('TRANSFER');
 
   // Update current time every second for real-time countdown
   useEffect(() => {
@@ -107,18 +128,18 @@ export default function TomadasPage() {
           status,
           created_at,
           taken_at,
-          from_currency:currencies!transactions_from_currency_id_fkey(code, symbol),
-          to_currency:currencies!transactions_to_currency_id_fkey(code, symbol),
+          from_currency:currencies!transactions_from_currency_id_fkey(id, code, symbol),
+          to_currency:currencies!transactions_to_currency_id_fkey(id, code, symbol),
           user:profiles!transactions_user_id_fkey(first_name, last_name, email),
           user_bank_account:user_bank_accounts(
             account_holder,
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(name)
+            bank:banks(name)
           )
         `)
-        .eq('status', 'TAKEN')
+        .in('status', ['TAKEN', 'ERROR'])
         .eq('taken_by', uid)
         .order('taken_at', { ascending: false });
 
@@ -132,8 +153,41 @@ export default function TomadasPage() {
     }
   }, [currentUserId]);
 
+  const loadCompanyBanks = async (currencyId: number) => {
+    setLoadingBanks(true);
+    try {
+      const { data, error } = await supabase
+        .from('banks_platforms')
+        .select('id, name, type, account_number, account_holder, current_balance, currency_id, display_methods, pago_movil_phone, pago_movil_ci, currency:currencies(id, code, symbol)')
+        .eq('currency_id', currencyId)
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+
+      const transformed = (data || []).map(b => ({
+        ...b,
+        currency: Array.isArray(b.currency) ? b.currency[0] : b.currency,
+      })) as CompanyBank[];
+
+      setCompanyBanks(transformed);
+    } catch (error) {
+      console.error('Error loading company banks:', error);
+    } finally {
+      setLoadingBanks(false);
+    }
+  };
+
   // Countdown timer: 15 minutes from when operation was taken
-  const getCountdownTime = (takenAt: string) => {
+  const getCountdownTime = (takenAt: string, status: string) => {
+    if (status === 'ERROR') {
+      return {
+        text: 'Esperando cliente',
+        isOverdue: false,
+        isSuperAdmin: userRole === 'SUPER_ADMIN'
+      };
+    }
+
     const takenTime = new Date(takenAt).getTime();
     const elapsedMs = currentTime - takenTime;
     const limitMs = 15 * 60 * 1000; // 15 minutes in milliseconds
@@ -182,6 +236,17 @@ export default function TomadasPage() {
       return;
     }
 
+    if (!selectedBankId) {
+      alert('Por favor selecciona el banco con el que se realizó el pago');
+      return;
+    }
+
+    const selectedBank = companyBanks.find(b => b.id === selectedBankId);
+    if (selectedBank && selectedBank.current_balance < selectedOperation.amount_received) {
+      alert(`Saldo insuficiente en ${selectedBank.name}. Disponible: ${selectedBank.currency?.symbol}${selectedBank.current_balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`);
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Upload proof to Supabase Storage
@@ -199,12 +264,15 @@ export default function TomadasPage() {
         .from('proofs')
         .getPublicUrl(fileName);
 
-      // Update transaction
+      const proofUrl = publicUrlData.publicUrl;
+
+      // Update transaction with bank reference
       const { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'COMPLETED',
-          payment_proof_url: publicUrlData.publicUrl,
+          bank_platform_id: selectedBankId,
+          payment_proof_url: proofUrl,
           payment_reference: paymentReference.trim(),
           paid_at: new Date().toISOString(),
         })
@@ -212,12 +280,94 @@ export default function TomadasPage() {
 
       if (updateError) throw updateError;
 
+      // Calculate interbank commission
+      const beneficiaryBankName = selectedOperation.user_bank_account?.bank?.name?.toLowerCase() || '';
+      const companyBankName = selectedBank?.name?.toLowerCase() || '';
+      const isInterbank = beneficiaryBankName && companyBankName && beneficiaryBankName !== companyBankName;
+      const INTERBANK_RATE = 0.003; // 0.3%
+      const isPagoMovil = paymentMethod === 'PAGO_MOVIL';
+      const hasCommission = (isInterbank && paymentMethod === 'TRANSFER') || isPagoMovil;
+      const commissionAmount = hasCommission ? Math.round(selectedOperation.amount_received * INTERBANK_RATE * 100) / 100 : 0;
+      const totalDebit = selectedOperation.amount_received + commissionAmount;
+
+      // Register bank movement (DEBIT) - payment
+      const { error: movementError } = await supabase
+        .from('bank_movements')
+        .insert({
+          bank_platform_id: selectedBankId,
+          type: 'DEBIT',
+          amount: selectedOperation.amount_received,
+          transaction_id: selectedOperation.id,
+          description: `Pago operación ${selectedOperation.transaction_number}`,
+        });
+
+      if (movementError) {
+        console.error('Error creating bank movement:', movementError);
+      }
+
+      // Register interbank commission movement if applicable
+      if (hasCommission && commissionAmount > 0) {
+        const { error: commError } = await supabase
+          .from('bank_movements')
+          .insert({
+            bank_platform_id: selectedBankId,
+            type: 'DEBIT',
+            amount: commissionAmount,
+            transaction_id: selectedOperation.id,
+            description: `Comisión interbancaria (0.3%) - ${isPagoMovil ? 'Pago Móvil' : 'Transferencia interbancaria'} - Op. ${selectedOperation.transaction_number}`,
+          });
+
+        if (commError) {
+          console.error('Error creating commission movement:', commError);
+        }
+      }
+
+      // Update bank balance (fetch fresh to avoid stale data)
+      const { data: freshBank, error: bankFetchError } = await supabase
+        .from('banks_platforms')
+        .select('current_balance')
+        .eq('id', selectedBankId)
+        .single();
+
+      if (!bankFetchError && freshBank) {
+        const newBalance = Number(freshBank.current_balance) - totalDebit;
+        const { error: balanceError } = await supabase
+          .from('banks_platforms')
+          .update({
+            current_balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedBankId);
+
+        if (balanceError) {
+          console.error('Error updating bank balance:', balanceError);
+        }
+      }
+
+      // Send WhatsApp notification to client
+      try {
+        await fetch('/api/whatsapp/notify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: selectedOperation.id,
+            paymentReference: paymentReference.trim(),
+            proofUrl,
+          }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending WhatsApp notification:', notifyError);
+      }
+
       // Close modal and refresh
       setShowPaymentModal(false);
       setSelectedOperation(null);
       setPaymentReference('');
       setPaymentProofFile(null);
       setPaymentProofPreview(null);
+      setSelectedBankId(null);
+      setCompanyBanks([]);
+      setPaymentMethod('TRANSFER');
       loadOperations();
     } catch (error) {
       console.error('Error marking as paid:', error);
@@ -235,13 +385,11 @@ export default function TomadasPage() {
 
     setSubmitting(true);
     try {
-      // Return to pool with admin note
+      // Update transaction to ERROR status
       const { error } = await supabase
         .from('transactions')
         .update({
-          status: 'POOL',
-          taken_by: null,
-          taken_at: null,
+          status: 'ERROR',
           admin_notes: `Error reportado: ${errorNote.trim()}`,
         })
         .eq('id', selectedOperation.id);
@@ -310,12 +458,13 @@ export default function TomadasPage() {
       ) : (
         <div className="grid gap-4">
           {operations.map((op) => {
-            const timeInfo = getCountdownTime(op.taken_at);
+            const timeInfo = getCountdownTime(op.taken_at, op.status);
             const showAsOverdue = timeInfo.isOverdue && !timeInfo.isSuperAdmin;
+            const hasError = op.status === 'ERROR';
             return (
               <div
                 key={op.id}
-                className={`bg-white rounded-2xl border ${showAsOverdue ? 'border-red-300' : 'border-slate-200'} p-5 shadow-sm`}
+                className={`bg-white rounded-2xl border ${hasError ? 'border-red-300 bg-red-50/30' : showAsOverdue ? 'border-red-300' : 'border-slate-200'} p-5 shadow-sm`}
               >
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                   {/* Left: Operation Info */}
@@ -341,18 +490,18 @@ export default function TomadasPage() {
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Beneficiario</p>
                       <p className="font-medium text-slate-800">{op.user_bank_account?.account_holder || 'N/A'}</p>
-                      <p className="text-xs text-slate-500">{op.user_bank_account?.bank_platform?.name || 'N/A'}</p>
+                      <p className="text-xs text-slate-500">{op.user_bank_account?.bank?.name || 'N/A'}</p>
                     </div>
 
                     {/* Countdown Timer */}
                     <div>
                       <p className="text-xs text-slate-500 mb-1">
-                        {timeInfo.isSuperAdmin ? 'Tiempo' : 'Tiempo Restante'}
+                        {hasError ? 'Estado' : timeInfo.isSuperAdmin ? 'Tiempo' : 'Tiempo Restante'}
                       </p>
-                      <div className={`flex items-center gap-1 ${timeInfo.isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <div className={`flex items-center gap-1 ${hasError ? 'text-slate-600' : timeInfo.isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
                         <Timer size={16} />
-                        <span className="font-mono font-bold text-lg">{timeInfo.text}</span>
-                        {showAsOverdue && (
+                        <span className={`font-mono font-bold ${hasError ? 'text-sm' : 'text-lg'}`}>{timeInfo.text}</span>
+                        {showAsOverdue && !hasError && (
                           <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-1">
                             Demorada
                           </span>
@@ -362,37 +511,49 @@ export default function TomadasPage() {
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 flex-shrink-0 mt-4 lg:mt-0">
                     <button
                       onClick={() => {
                         setSelectedOperation(op);
                         setShowBeneficiaryModal(true);
                       }}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
                       title="Ver datos"
                     >
                       <Eye size={20} className="text-slate-600" />
                     </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOperation(op);
-                        setShowErrorModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
-                    >
-                      <AlertTriangle size={18} />
-                      Reportar Error
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOperation(op);
-                        setShowPaymentModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                    >
-                      <CheckCircle2 size={18} />
-                      Marcar Pagada
-                    </button>
+                    {op.status === 'ERROR' ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl font-medium">
+                        <AlertTriangle size={18} />
+                        En corrección por cliente
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedOperation(op);
+                            setShowErrorModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-100 transition-colors"
+                        >
+                          <AlertTriangle size={18} />
+                          Reportar Error
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedOperation(op);
+                            setSelectedBankId(null);
+                            setPaymentMethod('TRANSFER');
+                            loadCompanyBanks(op.to_currency.id);
+                            setShowPaymentModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                        >
+                          <CheckCircle2 size={18} />
+                          Marcar Pagada
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -440,9 +601,9 @@ export default function TomadasPage() {
               <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
                 <div>
                   <p className="text-xs text-slate-500">Banco</p>
-                  <p className="font-bold text-slate-800">{selectedOperation.user_bank_account?.bank_platform?.name || 'N/A'}</p>
+                  <p className="font-bold text-slate-800">{selectedOperation.user_bank_account?.bank?.name || 'N/A'}</p>
                 </div>
-                <button onClick={() => copyToClipboard(selectedOperation.user_bank_account?.bank_platform?.name || '', 'bank')} className="p-2 hover:bg-slate-200 rounded-lg">
+                <button onClick={() => copyToClipboard(selectedOperation.user_bank_account?.bank?.name || '', 'bank')} className="p-2 hover:bg-slate-200 rounded-lg">
                   {copiedField === 'bank' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
                 </button>
               </div>
@@ -470,6 +631,21 @@ export default function TomadasPage() {
                   {copiedField === 'amount' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-emerald-600" />}
                 </button>
               </div>
+
+              {/* Copy All Button */}
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    const acc = selectedOperation.user_bank_account;
+                    const textToCopy = `Beneficiario: ${acc?.account_holder || 'N/A'}\nDocumento: ${acc?.document_type || ''}-${acc?.document_number || 'N/A'}\nBanco: ${acc?.bank?.name || 'N/A'}\nNúmero de Cuenta: ${acc?.account_number || 'N/A'}\nMonto a Pagar: ${selectedOperation.to_currency.symbol}${selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${selectedOperation.to_currency.code}`;
+                    copyToClipboard(textToCopy, 'all');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-colors font-medium border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                >
+                  {copiedField === 'all' ? <Check size={18} /> : <Copy size={18} />}
+                  {copiedField === 'all' ? '¡Datos copiados!' : 'Copiar todos los datos'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -481,7 +657,7 @@ export default function TomadasPage() {
           <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-auto">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <h3 className="font-bold text-lg">Marcar como Pagada</h3>
-              <button onClick={() => { setShowPaymentModal(false); setSelectedOperation(null); setPaymentReference(''); setPaymentProofFile(null); setPaymentProofPreview(null); }} className="p-2 hover:bg-slate-100 rounded-lg">
+              <button onClick={() => { setShowPaymentModal(false); setSelectedOperation(null); setPaymentReference(''); setPaymentProofFile(null); setPaymentProofPreview(null); setSelectedBankId(null); setCompanyBanks([]); setPaymentMethod('TRANSFER'); }} className="p-2 hover:bg-slate-100 rounded-lg">
                 <X size={20} />
               </button>
             </div>
@@ -499,6 +675,121 @@ export default function TomadasPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Bank Selector */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <Building2 size={16} className="inline mr-2" />
+                  Banco de la empresa (origen del pago)
+                </label>
+                {loadingBanks ? (
+                  <div className="flex items-center gap-2 px-4 py-3 border border-slate-200 rounded-xl text-slate-500">
+                    <Loader2 size={16} className="animate-spin" />
+                    Cargando bancos...
+                  </div>
+                ) : companyBanks.length === 0 ? (
+                  <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                    No hay cuentas bancarias activas en {selectedOperation.to_currency.code}
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {companyBanks.map((bank) => (
+                      <button
+                        key={bank.id}
+                        type="button"
+                        onClick={() => setSelectedBankId(bank.id)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${selectedBankId === bank.id
+                          ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200'
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-xs ${bank.type === 'BANK'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                            : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                            }`}>
+                            {bank.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium text-slate-800 text-sm">{bank.name}</p>
+                            <p className="text-xs text-slate-500">{bank.account_holder}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-bold ${bank.current_balance >= selectedOperation.amount_received ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {bank.currency?.symbol}{bank.current_balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                          </p>
+                          {bank.current_balance < selectedOperation.amount_received && (
+                            <p className="text-xs text-red-500">Saldo insuficiente</p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Method Selector (VES only) */}
+              {selectedOperation.to_currency.code === 'VES' && selectedBankId && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Método de pago:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('TRANSFER')}
+                      className={`px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all flex items-center justify-center gap-2 ${paymentMethod === 'TRANSFER'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                      🏦 Transferencia
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('PAGO_MOVIL')}
+                      className={`px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all flex items-center justify-center gap-2 ${paymentMethod === 'PAGO_MOVIL'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700 ring-2 ring-purple-200'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                      📱 Pago Móvil
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Interbank Commission Info */}
+              {selectedBankId && (() => {
+                const beneficiaryBank = selectedOperation.user_bank_account?.bank?.name?.toLowerCase() || '';
+                const companyBank = companyBanks.find(b => b.id === selectedBankId)?.name?.toLowerCase() || '';
+                const isInterbank = beneficiaryBank && companyBank && beneficiaryBank !== companyBank;
+                const isPagoMovilSelected = paymentMethod === 'PAGO_MOVIL';
+                const hasComm = (isInterbank && paymentMethod === 'TRANSFER') || isPagoMovilSelected;
+                if (!hasComm) return null;
+                const commAmount = Math.round(selectedOperation.amount_received * 0.003 * 100) / 100;
+                const total = selectedOperation.amount_received + commAmount;
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                    <p className="text-sm font-medium text-amber-800">
+                      ⚠️ {isPagoMovilSelected ? 'Comisión Pago Móvil' : 'Comisión interbancaria'} (0.3%)
+                    </p>
+                    <div className="text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-amber-700">Monto del pago:</span>
+                        <span className="font-medium">{selectedOperation.to_currency.symbol}{selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-amber-700">Comisión (0.3%):</span>
+                        <span className="font-medium text-red-600">-{selectedOperation.to_currency.symbol}{commAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-amber-300">
+                        <span className="text-amber-800 font-bold">Total descontado:</span>
+                        <span className="font-bold text-red-600">{selectedOperation.to_currency.symbol}{total.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Reference Number */}
               <div>
@@ -544,14 +835,14 @@ export default function TomadasPage() {
               {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => { setShowPaymentModal(false); setSelectedOperation(null); setPaymentReference(''); setPaymentProofFile(null); setPaymentProofPreview(null); }}
+                  onClick={() => { setShowPaymentModal(false); setSelectedOperation(null); setPaymentReference(''); setPaymentProofFile(null); setPaymentProofPreview(null); setSelectedBankId(null); setCompanyBanks([]); setPaymentMethod('TRANSFER'); }}
                   className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleMarkAsPaid}
-                  disabled={submitting || !paymentReference.trim() || !paymentProofFile}
+                  disabled={submitting || !paymentReference.trim() || !paymentProofFile || !selectedBankId}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {submitting ? (

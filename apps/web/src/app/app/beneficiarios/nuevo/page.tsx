@@ -225,10 +225,24 @@ const DocumentTypeSelect = ({
 
   // Filtrar opciones según la moneda seleccionada
   const filteredOptions = currencyCode
-    ? documentTypeOptions.filter(group =>
-      group.country === currencyToCountryMap[currencyCode] ||
-      group.country === 'WORLD'
-    )
+    ? documentTypeOptions.map(group => {
+      // Para VES, personalizar las opciones
+      if (currencyCode === 'VES') {
+        if (group.country === 'VE') {
+          return {
+            ...group,
+            options: group.options.filter(opt => opt.value === 'CI-V' || opt.value === 'CI-E')
+          };
+        }
+        // Excluir WORLD si es VES
+        if (group.country === 'WORLD') return null;
+      }
+
+      if (group.country === currencyToCountryMap[currencyCode] || group.country === 'WORLD') {
+        return group;
+      }
+      return null;
+    }).filter(Boolean) as typeof documentTypeOptions
     : documentTypeOptions;
 
   // Obtener la opción seleccionada
@@ -599,7 +613,7 @@ export default function NewBeneficiaryPage() {
                         <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                       </div>
-                      
+
                     </div>
                   )}
                   {errors.bank_id && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.bank_id}</p>}

@@ -108,9 +108,15 @@ export function LandingFooter() {
      <div>
       <h3 className="text-lg font-bold mb-4">Legal</h3>
       <ul className="space-y-2">
-       {['Términos y Condiciones', 'Política de Privacidad', 'Política Anti-Lavado', 'KYC', 'Cookies'].map((item) => (
-        <li key={item}>
-         <a href="#" className="text-gray-400 hover:text-white transition-colors">{item}</a>
+       {[
+        { label: 'Términos y Condiciones', href: '/user-agreement' },
+        { label: 'Política de Privacidad', href: '/privacy-policy' },
+        { label: 'Política Anti-Lavado', href: '#' },
+        { label: 'KYC', href: '#' },
+        { label: 'Cookies', href: '#' },
+       ].map((item) => (
+        <li key={item.label}>
+         <a href={item.href} className="text-gray-400 hover:text-white transition-colors">{item.label}</a>
         </li>
        ))}
       </ul>
@@ -141,8 +147,8 @@ export function LandingFooter() {
       © {new Date().getFullYear()} {config.business_name}. Todos los derechos reservados.
      </p>
      <div className="flex gap-6 text-sm text-gray-500">
-      <a href="#" className="hover:text-white transition-colors">Privacidad</a>
-      <a href="#" className="hover:text-white transition-colors">Términos</a>
+      <a href="/privacy-policy" className="hover:text-white transition-colors">Privacidad</a>
+      <a href="/user-agreement" className="hover:text-white transition-colors">Términos</a>
       <a href="#" className="hover:text-white transition-colors">Cookies</a>
      </div>
     </div>

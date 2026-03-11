@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { initializeClientSession } from '@/lib/client-session-config';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 
 interface BusinessConfig {
@@ -11,17 +12,27 @@ interface BusinessConfig {
   logo_url: string;
 }
 
-export default function LoginPage() {
+function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
     business_name: 'Fengxchange',
     logo_url: '',
   });
+
+  // Detectar razón de logout por inactividad
+  useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason === 'inactivity') {
+      setSessionMessage('Por seguridad, tu sesión ha sido cerrada debido a inactividad prolongada.');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const loadBusinessConfig = async () => {
@@ -46,6 +57,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSessionMessage(null);
     setLoading(true);
 
     try {
@@ -60,21 +72,34 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Obtener el perfil para saber el rol
+        // Obtener el perfil para saber el rol y estado KYC
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, is_kyc_verified')
           .eq('id', data.user.id)
           .single();
 
-        // Redirigir según el rol - Clientes van a /app
+        // Redirigir según el rol y verificación
         router.refresh();
         if (profile) {
-          switch (profile.role) {
-            case 'CLIENT':
-            case 'AFFILIATE':
-            default:
-              router.push('/app');
+          // Si el usuario pertenece a la administración (NO es Cliente ni Afiliado)
+          // tiene ABSOLUTAMENTE prohibido entrar por este login.
+          if (!['CLIENT', 'AFFILIATE'].includes(profile.role)) {
+            await supabase.auth.signOut();
+            setError('Acceso denegado. El personal administrativo debe ingresar por el acceso administrativo');
+            setLoading(false);
+            return;
+          }
+
+          const needsKyc = !profile.is_kyc_verified;
+
+          // Inicializar los timers de sesión de clientes en LocalStorage
+          initializeClientSession();
+
+          if (needsKyc) {
+            router.push('/app/verificar-identidad');
+          } else {
+            router.push('/app');
           }
         } else {
           router.push('/app');
@@ -175,6 +200,17 @@ export default function LoginPage() {
 
           {/* Card de login */}
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
+
+            {/* Mensaje de sesión expirada */}
+            {sessionMessage && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center gap-3">
+                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-amber-600 font-bold">!</span>
+                </div>
+                {sessionMessage}
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Error */}
               {error && (
@@ -297,5 +333,13 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPageWrapper() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center">Cargando...</div>}>
+      <LoginPage />
+    </React.Suspense>
   );
 }

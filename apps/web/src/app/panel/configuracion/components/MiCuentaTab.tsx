@@ -11,12 +11,14 @@ import {
   AlertTriangle,
   CheckCircle,
   ShieldCheck,
-  Info
+  Info,
+  Phone
 } from 'lucide-react';
 
 interface MiCuentaTabProps {
   userRole: 'SUPER_ADMIN' | 'ADMIN' | 'CAJERO' | 'SUPERVISOR';
   userEmail: string;
+  userPhone: string;
   user2FAEnabled: boolean;
 }
 
@@ -57,7 +59,7 @@ function getPasswordStrength(password: string): {
   return { score, label, color, checks };
 }
 
-export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiCuentaTabProps) {
+export default function MiCuentaTab({ userRole, userEmail, userPhone, user2FAEnabled }: MiCuentaTabProps) {
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
   // Estado unificado del formulario
@@ -65,6 +67,9 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
     // Cambio de email (solo SUPER_ADMIN)
     changeEmail: false,
     newEmail: '',
+    // Cambio de teléfono
+    changePhone: false,
+    newPhone: '',
     // Cambio de contraseña
     changePassword: false,
     newPassword: '',
@@ -87,7 +92,7 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
   );
 
   // Determinar si hay algún cambio activo
-  const hasActiveChange = formData.changeEmail || formData.changePassword;
+  const hasActiveChange = formData.changeEmail || formData.changePhone || formData.changePassword;
 
   // Validar si el formulario está listo para enviar
   const isFormValid = useMemo(() => {
@@ -98,6 +103,11 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
       if (!formData.newEmail) return false;
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.newEmail)) return false;
+    }
+
+    if (formData.changePhone) {
+      const cleanedPhone = formData.newPhone.replace(/\D/g, '');
+      if (cleanedPhone.length < 10 || cleanedPhone.length > 15) return false;
     }
 
     if (formData.changePassword) {
@@ -159,6 +169,28 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
         }
       }
 
+      // Cambiar teléfono si está activo
+      if (formData.changePhone) {
+        const phoneRes = await fetch('/api/auth/change-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newPhone: formData.newPhone,
+            twoFactorCode: formData.twoFactorCode,
+          }),
+        });
+
+        const phoneData = await phoneRes.json();
+
+        if (phoneRes.ok) {
+          results.push('Teléfono actualizado');
+        } else {
+          setMessage({ type: 'error', text: phoneData.error || 'Error al actualizar teléfono' });
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Cambiar contraseña si está activo
       if (formData.changePassword) {
         const passRes = await fetch('/api/auth/change-password', {
@@ -187,6 +219,8 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
         setFormData({
           changeEmail: false,
           newEmail: '',
+          changePhone: false,
+          newPhone: '',
           changePassword: false,
           newPassword: '',
           confirmPassword: '',
@@ -284,6 +318,51 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
           </div>
         )}
 
+        {/* Sección: Cambiar Teléfono/WhatsApp */}
+        <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
+                <Phone size={20} className="text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Cambiar Teléfono</h3>
+                <p className="text-sm text-slate-400">
+                  {userPhone ? `Actual: +${userPhone}` : 'No configurado'}
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.changePhone}
+                onChange={(e) => setFormData({ ...formData, changePhone: e.target.checked, newPhone: '' })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+            </label>
+          </div>
+
+          {formData.changePhone && (
+            <div className="mt-4 pt-4 border-t border-slate-700/50">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Nuevo número de teléfono/WhatsApp
+              </label>
+              <input
+                type="tel"
+                value={formData.newPhone}
+                onChange={(e) => setFormData({ ...formData, newPhone: e.target.value.replace(/\D/g, '') })}
+                placeholder="584121234567"
+                className="w-full px-4 py-3 bg-slate-700/80 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                required={formData.changePhone}
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Ingresa el número sin espacios ni guiones, incluyendo código de país (ej: 584121234567)
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Sección: Cambiar Contraseña */}
         <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -348,7 +427,7 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
                         />
                       </div>
                       <span className={`text-sm font-medium ${passwordStrength.score >= 4 ? 'text-green-400' :
-                          passwordStrength.score >= 3 ? 'text-yellow-400' : 'text-red-400'
+                        passwordStrength.score >= 3 ? 'text-yellow-400' : 'text-red-400'
                         }`}>
                         {passwordStrength.label}
                       </span>
@@ -377,8 +456,8 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     placeholder="••••••••"
                     className={`w-full px-4 py-3 bg-slate-700/80 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 pr-12 ${formData.confirmPassword && formData.confirmPassword !== formData.newPassword
-                        ? 'border-red-500/50'
-                        : 'border-slate-600/50'
+                      ? 'border-red-500/50'
+                      : 'border-slate-600/50'
                       }`}
                     required={formData.changePassword}
                   />
@@ -434,8 +513,8 @@ export default function MiCuentaTab({ userRole, userEmail, user2FAEnabled }: MiC
         {/* Mensaje de estado */}
         {message && (
           <div className={`flex items-center gap-2 p-4 rounded-xl ${message.type === 'success'
-              ? 'bg-green-500/10 border border-green-500/30 text-green-300'
-              : 'bg-red-500/10 border border-red-500/30 text-red-300'
+            ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+            : 'bg-red-500/10 border border-red-500/30 text-red-300'
             }`}>
             {message.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
             {message.text}

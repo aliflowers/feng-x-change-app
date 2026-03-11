@@ -20,6 +20,8 @@ import {
   Copy,
   Check,
   ArrowRight,
+  ShieldCheck,
+  AlertCircle,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +36,7 @@ interface PoolOperation {
   created_at: string;
   taken_at: string | null;
   client_proof_url: string | null;
+  admin_notes: string | null;
   from_currency: { id: number; code: string; symbol: string };
   to_currency: { id: number; code: string; symbol: string };
   user: { id: string; first_name: string; last_name: string; email: string };
@@ -43,7 +46,7 @@ interface PoolOperation {
     account_number: string;
     document_type: string | null;
     document_number: string | null;
-    bank_platform: { id: number; name: string };
+    bank: { id: number; name: string } | null;
   } | null;
   taken_by_profile: { first_name: string; last_name: string } | null;
 }
@@ -55,9 +58,10 @@ interface Currency {
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: LucideIcon; bgColor: string }> = {
-  POOL: { label: 'En Pool', color: 'text-blue-600', icon: Inbox, bgColor: 'bg-blue-100' },
-  TAKEN: { label: 'Tomada', color: 'text-amber-600', icon: Clock, bgColor: 'bg-amber-100' },
-  VERIFYING: { label: 'Verificando', color: 'text-purple-600', icon: Eye, bgColor: 'bg-purple-100' },
+  POOL: { label: 'Por verificar', color: 'text-amber-600', icon: Inbox, bgColor: 'bg-amber-100' },
+  VERIFIED: { label: 'Verificada', color: 'text-purple-600', icon: ShieldCheck, bgColor: 'bg-purple-100' },
+  TAKEN: { label: 'Tomada', color: 'text-blue-600', icon: Clock, bgColor: 'bg-blue-100' },
+  ERROR: { label: 'En corrección', color: 'text-red-600', icon: AlertCircle, bgColor: 'bg-red-100' },
   COMPLETED: { label: 'Completada', color: 'text-emerald-600', icon: CheckCircle2, bgColor: 'bg-emerald-100' },
   REJECTED: { label: 'Rechazada', color: 'text-red-600', icon: XCircle, bgColor: 'bg-red-100' },
 };
@@ -71,7 +75,7 @@ export default function PoolPage() {
   const [userRole, setUserRole] = useState<string>('');
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('POOL');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [currencyFilter, setCurrencyFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -82,7 +86,14 @@ export default function PoolPage() {
   const [showBeneficiaryModal, setShowBeneficiaryModal] = useState(false);
   const [takenOperation, setTakenOperation] = useState<PoolOperation | null>(null);
   const [takingOperation, setTakingOperation] = useState(false);
+  const [verifyingOperation, setVerifyingOperation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Reject modal states
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectingOperation, setRejectingOperation] = useState<PoolOperation | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -137,6 +148,7 @@ export default function PoolPage() {
           created_at,
           taken_at,
           client_proof_url,
+          admin_notes,
           from_currency:currencies!transactions_from_currency_id_fkey(id, code, symbol),
           to_currency:currencies!transactions_to_currency_id_fkey(id, code, symbol),
           user:profiles!transactions_user_id_fkey(id, first_name, last_name, email),
@@ -146,7 +158,7 @@ export default function PoolPage() {
             account_number,
             document_type,
             document_number,
-            bank_platform:banks_platforms(id, name)
+            bank:banks(id, name)
           ),
           taken_by_profile:profiles!transactions_taken_by_fkey(first_name, last_name)
         `)
@@ -199,7 +211,7 @@ export default function PoolPage() {
           taken_at: new Date().toISOString(),
         })
         .eq('id', operation.id)
-        .eq('status', 'POOL'); // Only take if still in POOL
+        .eq('status', 'VERIFIED'); // Only take if VERIFIED
 
       if (error) throw error;
 
@@ -219,6 +231,102 @@ export default function PoolPage() {
     }
   };
 
+  const handleVerifyOperation = async (operation: PoolOperation) => {
+    if (verifyingOperation) return;
+    if (userRole !== 'SUPER_ADMIN') {
+      alert('Solo el Super Admin puede verificar operaciones.');
+      return;
+    }
+    setVerifyingOperation(true);
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'VERIFIED',
+        })
+        .eq('id', operation.id)
+        .eq('status', 'POOL');
+
+      if (error) throw error;
+
+      // Enviar notificación WhatsApp a usuarios operativos
+      try {
+        await fetch('/api/whatsapp/notify-verified-operation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId: operation.id }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending verification notification:', notifyError);
+      }
+
+      // Refresh the list
+      loadOperations();
+    } catch (error) {
+      console.error('Error verifying operation:', error);
+      alert('Error al verificar la operación.');
+    } finally {
+      setVerifyingOperation(false);
+    }
+  };
+
+  const openRejectModal = (operation: PoolOperation) => {
+    setRejectingOperation(operation);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const closeRejectModal = () => {
+    setShowRejectModal(false);
+    setRejectingOperation(null);
+    setRejectReason('');
+  };
+
+  const handleRejectOperation = async () => {
+    if (!rejectingOperation || !rejectReason.trim()) {
+      alert('Por favor ingresa el motivo del rechazo.');
+      return;
+    }
+    setIsRejecting(true);
+
+    try {
+      // Actualizar estado a REJECTED
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'REJECTED',
+          admin_notes: rejectReason.trim(),
+        })
+        .eq('id', rejectingOperation.id);
+
+      if (error) throw error;
+
+      // Enviar notificación WhatsApp al cliente
+      try {
+        await fetch('/api/whatsapp/notify-rejection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: rejectingOperation.id,
+            reason: rejectReason.trim(),
+          }),
+        });
+      } catch (notifyError) {
+        console.error('Error sending rejection notification:', notifyError);
+      }
+
+      // Cerrar modal y refrescar
+      closeRejectModal();
+      loadOperations();
+    } catch (error) {
+      console.error('Error rejecting operation:', error);
+      alert('Error al rechazar la operación.');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -234,7 +342,7 @@ export default function PoolPage() {
     const acc = takenOperation.user_bank_account;
     const allData = `Beneficiario: ${acc.account_holder}
 Documento: ${acc.document_type || ''}-${acc.document_number || 'N/A'}
-Banco: ${acc.bank_platform?.name || 'N/A'}
+Banco: ${acc.bank?.name || 'N/A'}
 Número de cuenta: ${acc.account_number}
 Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${takenOperation.to_currency?.code}`;
     await copyToClipboard(allData, 'all');
@@ -256,6 +364,19 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ${minutes % 60}m`;
     return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  };
+
+  // Helper para parsear datos del OCR
+  const parseOcrData = (adminNotes: string | null): { amount?: number; reference?: string; date?: string; bank?: string } | null => {
+    if (!adminNotes) return null;
+    try {
+      return JSON.parse(adminNotes);
+    } catch {
+      // Formato legacy: "OCR Ref: XXX"
+      const refMatch = adminNotes.match(/Ref[:\s]+([A-Za-z0-9]+)/i);
+      if (refMatch) return { reference: refMatch[1] };
+      return null;
+    }
   };
 
   if (loading) {
@@ -318,9 +439,10 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
             className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-800"
           >
             <option value="">Todos los estados</option>
-            <option value="POOL">En Pool</option>
+            <option value="POOL">Por verificar</option>
+            <option value="VERIFIED">Verificadas</option>
             <option value="TAKEN">Tomadas</option>
-            <option value="VERIFYING">Verificando</option>
+            <option value="ERROR">En corrección</option>
             <option value="COMPLETED">Completadas</option>
             <option value="REJECTED">Rechazadas</option>
           </select>
@@ -437,7 +559,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             <Building2 size={14} className="text-slate-400" />
                             <div>
                               <p className="text-sm font-medium text-slate-700">
-                                {op.user_bank_account.bank_platform?.name}
+                                {op.user_bank_account.bank?.name || 'N/A'}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {op.user_bank_account.account_holder}
@@ -493,8 +615,29 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             </button>
                           )}
 
-                          {/* Take Operation Button */}
-                          {op.status === 'POOL' && (
+                          {/* Verify Operation Button - Only for SUPER_ADMIN on POOL status */}
+                          {op.status === 'POOL' && userRole === 'SUPER_ADMIN' && (
+                            <>
+                              <button
+                                onClick={() => handleVerifyOperation(op)}
+                                disabled={verifyingOperation}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                <ShieldCheck size={16} />
+                                Verificar
+                              </button>
+                              <button
+                                onClick={() => openRejectModal(op)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                <XCircle size={16} />
+                                Rechazar
+                              </button>
+                            </>
+                          )}
+
+                          {/* Take Operation Button - Only for VERIFIED status */}
+                          {op.status === 'VERIFIED' && (
                             <button
                               onClick={() => {
                                 setSelectedOperation(op);
@@ -504,6 +647,18 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                             >
                               <HandMetal size={16} />
                               Tomar
+                            </button>
+                          )}
+
+                          {/* Blocked Take Button for operations in ERROR state */}
+                          {op.status === 'ERROR' && (
+                            <button
+                              disabled
+                              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed border border-slate-200"
+                              title="Esperando que el cliente corrija los datos"
+                            >
+                              <AlertCircle size={16} />
+                              En corrección
                             </button>
                           )}
                         </div>
@@ -534,24 +689,167 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
               </button>
             </div>
             <div className="p-4 overflow-y-auto max-h-[70vh]">
-              {selectedOperation.client_proof_url?.split(',').map((url, index) => (
-                <div key={index} className="mb-4">
-                  <img
-                    src={url.trim()}
-                    alt={`Comprobante ${index + 1}`}
-                    className="w-full rounded-lg border border-slate-200"
-                  />
-                </div>
-              ))}
-              <a
-                href={selectedOperation.client_proof_url?.split(',')[0]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              >
-                <ExternalLink size={18} />
-                Abrir en nueva pestaña
-              </a>
+              {/* Operation Summary */}
+              {(() => {
+                const isPaypalVerified = selectedOperation.client_proof_url?.startsWith('PAYPAL_VERIFIED');
+                const ocrData = parseOcrData(selectedOperation.admin_notes);
+
+                // Parse PayPal data from admin_notes
+                const paypalData = (() => {
+                  if (!isPaypalVerified || !selectedOperation.admin_notes) return null;
+                  const notes = selectedOperation.admin_notes;
+                  const emailMatch = notes.match(/PAYPAL_EMAIL:\s*([^\s|]+)/);
+                  const invoiceMatch = notes.match(/INVOICE_ID:\s*([^\s|]+)/);
+                  const txIdMatch = notes.match(/TRANSACTION_ID:\s*([^\s|]+)/);
+                  const payDateMatch = notes.match(/PAYMENT_DATE:\s*([^\s|]+)/);
+                  const refMatch = notes.match(/REFERENCE:\s*([^\s|]+)/);
+                  return {
+                    email: emailMatch?.[1] || 'N/A',
+                    invoiceId: invoiceMatch?.[1] || 'N/A',
+                    transactionId: txIdMatch?.[1] || null,
+                    paymentDate: payDateMatch?.[1] || null,
+                    reference: refMatch?.[1] || null,
+                  };
+                })();
+
+                return (
+                  <>
+                    <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-slate-500">Operación:</span>
+                          <span className="font-bold ml-2">{selectedOperation.transaction_number}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Cliente:</span>
+                          <span className="font-medium ml-2">{selectedOperation.user?.first_name} {selectedOperation.user?.last_name}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Envía:</span>
+                          <span className="font-bold ml-2">{selectedOperation.from_currency?.symbol}{selectedOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.from_currency?.code}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Recibe:</span>
+                          <span className="font-bold text-emerald-600 ml-2">{selectedOperation.to_currency?.symbol}{selectedOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {selectedOperation.to_currency?.code}</span>
+                        </div>
+                        {/* OCR Data for non-PayPal */}
+                        {!isPaypalVerified && ocrData?.reference && (
+                          <div>
+                            <span className="text-slate-500">Referencia:</span>
+                            <span className="font-mono font-bold ml-2">{ocrData.reference}</span>
+                          </div>
+                        )}
+                        {!isPaypalVerified && ocrData?.date && (
+                          <div>
+                            <span className="text-slate-500">Fecha:</span>
+                            <span className="font-medium ml-2">{ocrData.date}</span>
+                          </div>
+                        )}
+                        {!isPaypalVerified && ocrData?.bank && (
+                          <div>
+                            <span className="text-slate-500">Banco:</span>
+                            <span className="font-medium ml-2">{ocrData.bank}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* PayPal Verified Info */}
+                    {isPaypalVerified && paypalData && (
+                      <div className="mb-4 space-y-3">
+                        {/* PayPal Badge */}
+                        <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <ShieldCheck size={24} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-blue-800">Pago verificado por PayPal</p>
+                            <p className="text-xs text-blue-600">Esta transacción fue confirmada automáticamente por el sistema de facturación de PayPal.</p>
+                          </div>
+                        </div>
+
+                        {/* PayPal Transaction Details */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl divide-y divide-slate-200">
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Método de pago</span>
+                            <span className="text-sm font-bold text-blue-700">PayPal Invoice</span>
+                          </div>
+                          {paypalData.transactionId && paypalData.transactionId !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-slate-500">ID de transacción</span>
+                              <span className="text-sm font-mono font-bold text-slate-800">{paypalData.transactionId}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">N.° de factura</span>
+                            <span className="text-sm font-mono font-bold text-slate-800">{paypalData.invoiceId}</span>
+                          </div>
+                          {paypalData.reference && paypalData.reference !== 'N/A' && (
+                            <div className="flex items-center justify-between p-3">
+                              <span className="text-sm text-slate-500">Formato de pago n.°</span>
+                              <span className="text-sm font-mono font-bold text-slate-800">{paypalData.reference}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Correo del cliente</span>
+                            <span className="text-sm font-medium text-slate-800">{paypalData.email}</span>
+                          </div>
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Fecha de pago</span>
+                            <span className="text-sm font-medium text-slate-800">
+                              {paypalData.paymentDate && paypalData.paymentDate !== 'N/A'
+                                ? new Date(paypalData.paymentDate).toLocaleDateString('es-VE', {
+                                  day: '2-digit',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })
+                                : new Date(selectedOperation.created_at).toLocaleDateString('es-VE', {
+                                  day: '2-digit',
+                                  month: 'long',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              }
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between p-3">
+                            <span className="text-sm text-slate-500">Estado del pago</span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full">
+                              <CheckCircle2 size={14} />
+                              Pagado
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Proof Image - Only for non-PayPal */}
+              {!selectedOperation.client_proof_url?.startsWith('PAYPAL_VERIFIED') && (
+                <>
+                  {selectedOperation.client_proof_url?.split(',').map((url, index) => (
+                    <div key={index} className="mb-4">
+                      <img
+                        src={url.trim()}
+                        alt={`Comprobante ${index + 1}`}
+                        className="w-full rounded-lg border border-slate-200"
+                      />
+                    </div>
+                  ))}
+                  <a
+                    href={selectedOperation.client_proof_url?.split(',')[0]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  >
+                    <ExternalLink size={18} />
+                    Abrir en nueva pestaña
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -594,7 +892,7 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                 {selectedOperation.user_bank_account && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Banco destino:</span>
-                    <span className="font-medium">{selectedOperation.user_bank_account.bank_platform?.name}</span>
+                    <span className="font-medium">{selectedOperation.user_bank_account.bank?.name || 'N/A'}</span>
                   </div>
                 )}
               </div>
@@ -686,11 +984,11 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   <div>
                     <p className="text-xs text-slate-500">Banco</p>
                     <p className="font-bold text-slate-800">
-                      {takenOperation.user_bank_account?.bank_platform?.name || 'N/A'}
+                      {takenOperation.user_bank_account?.bank?.name || 'N/A'}
                     </p>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank_platform?.name || '', 'bank')}
+                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.bank?.name || '', 'bank')}
                     className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
                     title="Copiar"
                   >
@@ -770,6 +1068,88 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   <ArrowRight size={18} />
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Operation Modal */}
+      {showRejectModal && rejectingOperation && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <XCircle className="text-red-600" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Rechazar Transacción</h3>
+                  <p className="text-sm text-slate-500">{rejectingOperation.transaction_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeRejectModal}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-sm text-slate-600 mb-2">
+                  Cliente: <span className="font-medium text-slate-900">{rejectingOperation.user.first_name} {rejectingOperation.user.last_name}</span>
+                </p>
+                <p className="text-sm text-slate-600">
+                  Monto: <span className="font-medium text-slate-900">{rejectingOperation.from_currency.symbol}{rejectingOperation.amount_sent.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {rejectingOperation.from_currency.code}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Motivo del rechazo <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Escribe el motivo por el cual se rechaza esta transacción. Este mensaje será enviado al cliente por WhatsApp."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-200 focus:border-red-400 transition-all resize-none"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Este mensaje será enviado al cliente vía WhatsApp.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 p-6 border-t border-slate-100">
+              <button
+                onClick={closeRejectModal}
+                disabled={isRejecting}
+                className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRejectOperation}
+                disabled={isRejecting || !rejectReason.trim()}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRejecting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Rechazando...
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={18} />
+                    Confirmar Rechazo
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

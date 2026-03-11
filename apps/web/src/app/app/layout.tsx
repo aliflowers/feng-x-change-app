@@ -14,11 +14,14 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import ClientSessionManager from '@/components/ClientSessionManager';
 
 interface UserProfile {
   first_name: string;
   last_name: string;
   email: string;
+  is_kyc_verified: boolean;
+  role: string;
 }
 
 interface BusinessConfig {
@@ -43,6 +46,7 @@ export default function ClientLayout({
   const pathname = usePathname();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
@@ -50,17 +54,47 @@ export default function ClientLayout({
     logo_url: '',
   });
 
+  // Rutas que no requieren KYC verificado
+  const kycExemptPaths = [
+    '/app/verificar-identidad',
+    '/app/verificar-identidad/callback',
+  ];
+
   useEffect(() => {
     const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, email')
-          .eq('id', user.id)
-          .single();
-        if (data) setProfile(data);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, email, is_kyc_verified, role')
+            .eq('id', user.id)
+            .single();
+          if (data) {
+            // Bloqueo de ROL: El personal administrativo no puede navegar en el area de Clientes
+            if (!['CLIENT', 'AFFILIATE'].includes(data.role)) {
+              router.push('/panel');
+              // No seteamos el perfil ni marcamos false en loading para que se quede en estado "Cargando" mientras redirige
+              return;
+            }
+
+            setProfile(data);
+
+            // Verificar si el usuario necesita KYC
+            const needsKyc = !data.is_kyc_verified;
+            const isExemptPath = kycExemptPaths.some(path => pathname.startsWith(path));
+
+            if (needsKyc && !isExemptPath) {
+              router.push('/app/verificar-identidad');
+              // No usamos return prematuro aquí para permitir que setIsLoading(false) se ejecute,
+              // de lo contrario el spinner infinito se queda congelado bloqueando interacciones.
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
       }
+      setIsLoading(false);
     };
     const loadBusinessConfig = async () => {
       try {
@@ -80,7 +114,7 @@ export default function ClientLayout({
     };
     loadProfile();
     loadBusinessConfig();
-  }, []);
+  }, [pathname, router]);
 
   // Close menu when clicking outside (only when menu is open)
   useEffect(() => {
@@ -112,8 +146,38 @@ export default function ClientLayout({
     return `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || 'U';
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
+          <p className="text-gray-500 font-medium">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificación de seguridad de renderizado para KYC
+  const needsKyc = profile && !profile.is_kyc_verified;
+  const isExemptPath = kycExemptPaths.some(path => pathname.startsWith(path));
+
+  // Si el usuario necesita KYC y no está en una ruta exenta, aunque cambie la URL manual
+  // esto retornará nulo o el loader mientras router.push hace efecto, bloqueando los children
+  if (needsKyc && !isExemptPath) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent mb-4"></div>
+        <p className="text-gray-500 font-medium text-center px-4">
+          Redirigiendo al área de verificación de identidad...<br />
+          Por seguridad no puedes acceder al sistema hasta completar este paso.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 pb-20 md:pb-0">
+      <ClientSessionManager />
       {/* Header - Desktop con navegación, Móvil simplificado */}
       <header className="bg-gradient-to-r from-[#05294F] to-[#07478F] shadow-lg sticky top-0 z-50">
         <div className="container-app flex items-center justify-between h-14 md:h-16">
