@@ -7,6 +7,7 @@
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @fengxchange/web dev",
     "dev:backend": "pnpm --filter @fengxchange/backend dev",
+    "start": "pnpm --filter @fengxchange/web start",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter @fengxchange/web build",
     "build:backend": "pnpm --filter @fengxchange/backend build",
