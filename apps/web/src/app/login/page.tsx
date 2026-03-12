@@ -172,17 +172,19 @@ function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="w-full max-w-md">
           {/* Logo móvil */}
-          <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="inline-block no-underline">
+          <div className="lg:hidden text-center mb-8 w-full flex justify-center">
+            <Link href="/" className="inline-flex flex-col items-center gap-3 w-full max-w-[240px] no-underline">
               {businessConfig.logo_url ? (
-                <img
-                  src={businessConfig.logo_url}
-                  alt={businessConfig.business_name}
-                  className="h-14 w-auto object-contain"
-                />
+                <div className="bg-gradient-to-br from-[#05294F] to-[#07478F] px-6 py-4 rounded-xl shadow-lg border border-[#0a5cb8]/30 w-full flex justify-center items-center">
+                  <img
+                    src={businessConfig.logo_url}
+                    alt={businessConfig.business_name}
+                    className="h-12 w-auto object-contain drop-shadow-md"
+                  />
+                </div>
               ) : (
-                <div className="w-14 h-14 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center mx-auto">
-                  <span className="text-white font-bold text-xl">{businessConfig.business_name.charAt(0)}</span>
+                <div className="w-16 h-16 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/30">
+                  <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
                 </div>
               )}
             </Link>
@@ -322,14 +324,13 @@ function LoginPage() {
               </Link>
             </p>
           </div>
-        </div>
-
-        {/* Volver */}
-        <div className="mt-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2 text-gray-500 text-sm hover:text-gray-700 transition-colors no-underline">
-            <ArrowRight size={16} className="rotate-180" />
-            Volver al inicio
-          </Link>
+          {/* Volver */}
+          <div className="mt-8 pt-6 lg:mt-12 text-center">
+            <Link href="/" className="inline-flex items-center gap-2 text-slate-500 text-sm hover:text-slate-800 transition-colors no-underline font-medium">
+              <ArrowRight size={16} className="rotate-180" />
+              Volver al inicio
+            </Link>
+          </div>
         </div>
       </div>
     </main>

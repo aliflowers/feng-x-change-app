@@ -265,20 +265,22 @@ function BackofficeLoginForm() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-gradient-to-br from-slate-100 to-slate-200">
         <div className="w-full max-w-md">
           {/* Logo móvil */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex flex-col items-center gap-2">
+          <div className="lg:hidden text-center mb-8 w-full flex justify-center">
+            <div className="inline-flex flex-col items-center gap-3 w-full max-w-[240px]">
               {businessConfig.logo_url ? (
-                <img
-                  src={businessConfig.logo_url}
-                  alt={businessConfig.business_name}
-                  className="h-14 w-auto object-contain"
-                />
+                <div className="bg-slate-900 px-6 py-4 rounded-xl shadow-lg border border-slate-800 w-full flex justify-center items-center">
+                  <img
+                    src={businessConfig.logo_url}
+                    alt={businessConfig.business_name}
+                    className="h-12 w-auto object-contain drop-shadow-md"
+                  />
+                </div>
               ) : (
-                <div className="w-14 h-14 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
-                  <span className="text-white font-bold text-xl">{businessConfig.business_name.charAt(0)}</span>
+                <div className="w-16 h-16 bg-gradient-to-br from-[#AB2820] to-[#8B2E34] rounded-xl flex items-center justify-center shadow-lg shadow-red-900/30">
+                  <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
                 </div>
               )}
-              <span className="text-xs text-[#AB2820] font-semibold">BACKOFFICE</span>
+              <span className="text-xs text-[#AB2820] font-bold tracking-widest mt-1">BACKOFFICE</span>
             </div>
           </div>
 
