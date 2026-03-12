@@ -14,10 +14,20 @@ import { cookies } from 'next/headers';
  * 3. Redirige al usuario a la página de destino (login o dashboard).
  */
 export async function GET(request: NextRequest) {
- const { searchParams, origin } = new URL(request.url);
- const code = searchParams.get('code');
+ const requestUrl = new URL(request.url);
+ const code = requestUrl.searchParams.get('code');
  // Si no hay "next", por defecto enviamos al login con mensaje de éxito
- const next = searchParams.get('next') ?? '/login?verified=true';
+ const next = requestUrl.searchParams.get('next') ?? '/login?verified=true';
+
+ // En Railway / Vercel el request.url a veces usa "localhost" por el proxy interno.
+ // Usamos la variable de entorno NEXT_PUBLIC_SITE_URL configurada localmente / en Railway.
+ // Si no existe, hace un fallback al origin de la petición.
+ let safeOrigin = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+ 
+ // Fallback extremo por si la variable de entorno no está configurada y detecta localhost internamente en prod
+ if (safeOrigin.includes('localhost') && process.env.NODE_ENV === 'production') {
+  safeOrigin = 'https://feng-x-change-app-ambiente-de-prueba.up.railway.app';
+ }
 
  if (code) {
   const cookieStore = await cookies();
@@ -44,13 +54,14 @@ export async function GET(request: NextRequest) {
 
   if (!error) {
    // Si el intercambio es exitoso, redirigir a la página deseada
-   // Usamos el origin del request para asegurar la ruta absoluta correcta
-   return NextResponse.redirect(`${origin}${next}`);
+   // Usamos safeOrigin para redirigir siempre al dominio seguro y correcto
+   const safeNext = next.startsWith('/') ? next : `/${next}`;
+   return NextResponse.redirect(`${safeOrigin}${safeNext}`);
   } else {
    console.error('Auth Callback Error:', error);
   }
  }
 
  // Si no hay código o falla el intercambio, redirigir a login con error
- return NextResponse.redirect(`${origin}/login?error=auth_code_error`);
+ return NextResponse.redirect(`${safeOrigin}/login?error=auth_code_error`);
 }
