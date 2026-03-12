@@ -205,9 +205,9 @@ export default async function HomePage() {
           </div>
 
           {/* Carrusel de testimonios */}
-          <div className="animate-marquee-slow flex gap-6">
+          <div className="animate-marquee-slow flex w-max hover:[animation-play-state:paused] group">
             {[...Array(2)].map((_, setIndex) => (
-              <div key={setIndex} className="flex gap-6 shrink-0">
+              <div key={setIndex} className="flex gap-6 pr-6 shrink-0">
                 {[
                   { name: 'María González', conversion: 'USD → VES', review: 'Excelente servicio, mi dinero llegó en menos de 10 minutos. La tasa fue mejor que en otros lugares. ¡100% recomendado!' },
                   { name: 'Carlos Rodríguez', conversion: 'COP → VES', review: 'Llevo 6 meses usando Fengxchange y nunca he tenido problemas. El soporte responde súper rápido por WhatsApp.' },

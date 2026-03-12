@@ -1,9 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Shield, Zap, Globe, CheckCircle } from 'lucide-react';
+
+interface BusinessConfig {
+  business_name: string;
+  logo_url: string;
+}
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -20,6 +25,30 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [countryCode, setCountryCode] = useState('+58');
   const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
+    business_name: 'Fengxchange',
+    logo_url: '',
+  });
+
+  useEffect(() => {
+    const loadBusinessConfig = async () => {
+      try {
+        const response = await fetch('/api/public/business');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.info) {
+            setBusinessConfig({
+              business_name: data.info.business_name || 'Fengxchange',
+              logo_url: data.info.logo_url || '',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading business config:', error);
+      }
+    };
+    loadBusinessConfig();
+  }, []);
 
   // Países disponibles con sus códigos telefónicos
   const countries = [
@@ -147,11 +176,18 @@ export default function RegisterPage() {
         {/* Contenido */}
         <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 mb-12 no-underline">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">F</span>
-            </div>
-            <span className="text-3xl font-bold text-white">Fengxchange</span>
+          <Link href="/" className="mb-12 no-underline">
+            {businessConfig.logo_url ? (
+              <img
+                src={businessConfig.logo_url}
+                alt={businessConfig.business_name}
+                className="h-16 w-auto object-contain"
+              />
+            ) : (
+              <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
+              </div>
+            )}
           </Link>
 
           {/* Título principal */}
@@ -187,12 +223,21 @@ export default function RegisterPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-gradient-to-br from-slate-50 to-blue-50 overflow-y-auto">
         <div className="w-full max-w-md py-8">
           {/* Logo móvil */}
-          <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-3 no-underline">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-xl">F</span>
-              </div>
-              <span className="text-2xl font-bold text-gray-900">Fengxchange</span>
+          <div className="lg:hidden text-center mb-8 w-full flex justify-center">
+            <Link href="/" className="inline-flex flex-col items-center gap-3 w-full max-w-[240px] no-underline">
+              {businessConfig.logo_url ? (
+                <div className="bg-gradient-to-br from-[#05294F] to-[#07478F] px-6 py-4 rounded-xl shadow-lg border border-[#0a5cb8]/30 w-full flex justify-center items-center">
+                  <img
+                    src={businessConfig.logo_url}
+                    alt={businessConfig.business_name}
+                    className="h-12 w-auto object-contain drop-shadow-md"
+                  />
+                </div>
+              ) : (
+                <div className="w-16 h-16 bg-gradient-to-br from-[#05294F] to-[#07478F] rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/30">
+                  <span className="text-white font-bold text-2xl">{businessConfig.business_name.charAt(0)}</span>
+                </div>
+              )}
             </Link>
           </div>
 

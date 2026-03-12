@@ -66,7 +66,8 @@ export const ExchangeTable = ({ rates, loading = false }: ExchangeTableProps) =>
 
       {/* Tabla */}
       <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-[#05294F] text-white px-6 py-4 grid grid-cols-4 font-semibold text-sm">
+        {/* Encabezado Desktop */}
+        <div className="hidden md:grid bg-[#05294F] text-white px-6 py-4 grid-cols-4 font-semibold text-sm">
           <span>Conversión</span>
           <span className="text-center">Envías</span>
           <span className="text-center">Recibes</span>
@@ -79,30 +80,48 @@ export const ExchangeTable = ({ rates, loading = false }: ExchangeTableProps) =>
           const calculatedAmount = (parseFloat(inputAmount) || 0) * rate.rate;
 
           return (
-            <div key={i} className="px-6 py-4 grid grid-cols-4 items-center border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <span className="flex items-center gap-2">
-                <CountryFlag code={rate.from_currency.code} size={24} />
-                <span className="text-xs font-medium text-gray-600">{rate.from_currency.code}</span>
-                <ArrowRight size={14} className="text-gray-400" />
-                <CountryFlag code={rate.to_currency.code} size={24} />
-                <span className="text-xs font-medium text-gray-600">{rate.to_currency.code}</span>
-              </span>
-              <div className="flex items-center justify-center">
-                <input
-                  type="number"
-                  value={inputAmount}
-                  onChange={(e) => setTableAmounts(prev => ({ ...prev, [key]: e.target.value }))}
-                  className="w-20 text-center border border-gray-200 rounded-lg px-2 py-1 text-sm font-medium focus:ring-2 focus:ring-[#05294F] focus:border-transparent"
-                  min="0"
-                />
-                <span className="ml-1 text-xs text-gray-500">{rate.from_currency.code}</span>
+            <div key={i} className="p-5 md:px-6 md:py-4 flex flex-col md:grid md:grid-cols-4 items-center gap-4 md:gap-0 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              
+              {/* Conversión */}
+              <div className="flex items-center justify-between w-full md:w-auto md:justify-start">
+                <span className="text-xs font-bold text-gray-400 md:hidden uppercase tracking-wider">Conversión</span>
+                <span className="flex items-center gap-2">
+                  <CountryFlag code={rate.from_currency.code} size={24} />
+                  <span className="text-sm font-semibold text-gray-700">{rate.from_currency.code}</span>
+                  <ArrowRight size={14} className="text-gray-400 mx-1" />
+                  <CountryFlag code={rate.to_currency.code} size={24} />
+                  <span className="text-sm font-semibold text-gray-700">{rate.to_currency.code}</span>
+                </span>
               </div>
-              <span className="text-center font-bold text-lg text-green-600">
-                {rate.to_currency.symbol} {formatNumber(calculatedAmount, 2)}
-              </span>
-              <div className="text-right">
-                <Link href="/register" className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-lg font-medium text-sm hover:shadow-lg transition-all no-underline">
-                  Enviar <ArrowRight size={16} />
+
+              {/* Envías */}
+              <div className="flex items-center justify-between w-full md:w-auto md:justify-center">
+                <span className="text-xs font-bold text-gray-400 md:hidden uppercase tracking-wider">Envías</span>
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    value={inputAmount}
+                    onChange={(e) => setTableAmounts(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="w-24 text-center border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-700 focus:ring-2 focus:ring-[#05294F] focus:border-transparent bg-gray-50"
+                    min="0"
+                  />
+                  <span className="ml-2 text-sm font-bold text-gray-500">{rate.from_currency.code}</span>
+                </div>
+              </div>
+
+              {/* Recibes */}
+              <div className="flex items-center justify-between w-full md:w-auto md:justify-center">
+                <span className="text-xs font-bold text-gray-400 md:hidden uppercase tracking-wider">Recibes</span>
+                <span className="font-bold text-lg md:text-xl text-emerald-600 flex items-baseline gap-1">
+                  <span className="text-sm">{rate.to_currency.symbol}</span>
+                  {formatNumber(calculatedAmount, 2)}
+                </span>
+              </div>
+
+              {/* Acción */}
+              <div className="w-full md:w-auto md:text-right mt-2 md:mt-0">
+                <Link href="/register" className="w-full md:inline-flex flex justify-center items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 rounded-xl font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all no-underline">
+                  Enviar <ArrowRight size={18} />
                 </Link>
               </div>
             </div>
