@@ -12,9 +12,17 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const userId = url.searchParams.get('userId') || '';
 
-  const origin = request.headers.get('origin') || request.headers.get('referer')
-   ? new URL(request.headers.get('referer') || request.headers.get('origin') || '').origin
-   : url.origin;
+  let origin = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!origin) {
+      origin = request.headers.get('origin') || request.headers.get('referer')
+       ? new URL(request.headers.get('referer') || request.headers.get('origin') || '').origin
+       : url.origin;
+  }
+
+  // Salvavidas para evitar localhost en Railway en producción
+  if (process.env.NODE_ENV === 'production' && origin.includes('localhost')) {
+      origin = 'https://feng-x-change-app-ambiente-de-prueba.up.railway.app';
+  }
 
   // Use env var if set, otherwise build from origin
   const redirectUri = process.env.PAYPAL_REDIRECT_URI || `${origin}/paypal-callback`;

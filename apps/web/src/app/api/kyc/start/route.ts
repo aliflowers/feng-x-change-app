@@ -86,8 +86,14 @@ export async function POST(request: NextRequest) {
    // En producción podrías querer retornar la URL existente
   }
 
-  // Construir URL de callback
-  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // Construir URL de callback de forma segura
+  let origin = process.env.NEXT_PUBLIC_SITE_URL || request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  
+  // Salvavidas para evitar localhost en Railway
+  if (process.env.NODE_ENV === 'production' && origin.includes('localhost')) {
+   origin = 'https://feng-x-change-app-ambiente-de-prueba.up.railway.app';
+  }
+  
   const callbackUrl = `${origin}/app/verificar-identidad/callback`;
 
   // Crear sesión en Didit
