@@ -427,27 +427,7 @@ export async function handleProofReceived(
   const metadata = session.metadata;
 
   try {
-    // Generar número de transacción único en formato OP-YYYY-NNNNN
-    const currentYear = new Date().getFullYear();
 
-    // Obtener el último número de transacción del año actual
-    const { data: lastTransaction } = await supabase
-      .from('transactions')
-      .select('transaction_number')
-      .like('transaction_number', `OP-${currentYear}-%`)
-      .order('transaction_number', { ascending: false })
-      .limit(1)
-      .single();
-
-    let nextNumber = 1;
-    if (lastTransaction?.transaction_number) {
-      const lastNum = parseInt(lastTransaction.transaction_number.split('-')[2], 10);
-      if (!isNaN(lastNum)) {
-        nextNumber = lastNum + 1;
-      }
-    }
-
-    const transactionNumber = `OP-${currentYear}-${nextNumber.toString().padStart(5, '0')}`;
 
     // Obtener IDs de monedas
     const { data: currencies } = await supabase
@@ -478,7 +458,6 @@ export async function handleProofReceived(
     const { data: newTransaction, error: insertError } = await supabase
       .from('transactions')
       .insert({
-        transaction_number: transactionNumber,
         user_id: session.user_id,
         from_currency_id: fromCurrencyId,
         to_currency_id: toCurrencyId,
@@ -491,7 +470,7 @@ export async function handleProofReceived(
         status: 'POOL', // Va al pool de operaciones
         admin_notes: ocrNotes,
       })
-      .select('id')
+      .select('id, transaction_number')
       .single();
 
     if (insertError || !newTransaction) {
@@ -529,7 +508,7 @@ export async function handleProofReceived(
     const bankName = (beneficiary?.bank as any)?.name || 'No especificado';
 
     // Confirmar al usuario
-    await sendOperationCreated(phoneNumber, transactionNumber);
+    await sendOperationCreated(phoneNumber, newTransaction.transaction_number);
 
     // Mensaje adicional con resumen
     const currencyFrom = metadata.selected_currency_from || 'USD';

@@ -639,26 +639,9 @@ export async function handleMultiCreateTransactions(
 
   // Crear transacciones
   for (const item of items) {
-    // Generar número de transacción único
-    const year = new Date().getFullYear();
-    const { data: lastTx } = await supabase
-      .from('transactions')
-      .select('transaction_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
 
-    let nextSeq = 1;
-    if (lastTx?.transaction_number) {
-      const match = lastTx.transaction_number.match(/OP-\d{4}-(\d+)/);
-      if (match) {
-        nextSeq = parseInt(match[1], 10) + 1;
-      }
-    }
-    const transactionNumber = `OP-${year}-${String(nextSeq).padStart(5, '0')}`;
 
     console.log('[Multi] Insertando transacción:', {
-      transactionNumber,
       userId,
       fromCurrencyId,
       toCurrencyId,
@@ -668,11 +651,10 @@ export async function handleMultiCreateTransactions(
       beneficiary_id: item.beneficiary_id,
     });
 
-    const { error } = await supabase
+    const { data: insertedTransaction, error } = await supabase
       .from('transactions')
       .insert({
         user_id: userId,
-        transaction_number: transactionNumber,
         from_currency_id: fromCurrencyId,
         to_currency_id: toCurrencyId,
         amount_sent: item.amount_send,
@@ -683,14 +665,14 @@ export async function handleMultiCreateTransactions(
         client_proof_url: proofUrl, // Corregido: era proof_url
         admin_notes: `Batch: ${batchId} (${items.length} envíos)`, // Corregido: era notes
       })
-      .select()
+      .select('transaction_number')
       .single();
 
     if (error) {
       console.error('[Multi] Error insertando transacción:', error.message, error.details);
-    } else {
-      console.log('[Multi] Transacción creada:', transactionNumber);
-      transactionNumbers.push(transactionNumber);
+    } else if (insertedTransaction) {
+      console.log('[Multi] Transacción creada:', insertedTransaction.transaction_number);
+      transactionNumbers.push(insertedTransaction.transaction_number);
     }
   }
 
