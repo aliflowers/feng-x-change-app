@@ -27,17 +27,40 @@ export default function ResetPasswordPage() {
   logo_url: '',
  });
 
- // Intercambiar el código PKCE en el lado del cliente
- // El code_verifier está en las cookies del navegador (donde se generó al solicitar el reset).
- // El servidor NO puede acceder a estas cookies correctamente, por eso lo hacemos aquí.
+ // Verificar el token de recuperación usando verifyOtp (sin PKCE)
+ // Esto elimina completamente la dependencia de cookies code_verifier.
  useEffect(() => {
   const handleRecoveryFlow = async () => {
-   // 1. Verificar si hay un code en la URL (PKCE flow)
    const urlParams = new URLSearchParams(window.location.search);
+   const tokenHash = urlParams.get('token_hash');
+   const type = urlParams.get('type');
    const code = urlParams.get('code');
 
+   // Flujo 1: token_hash directo (sin PKCE, más confiable)
+   if (tokenHash && type === 'recovery') {
+    console.log('[Reset Password] token_hash found, verifying OTP...');
+    const { error } = await supabase.auth.verifyOtp({
+     token_hash: tokenHash,
+     type: 'recovery',
+    });
+
+    if (error) {
+     console.error('[Reset Password] verifyOtp failed:', error.message);
+     setIsSessionReady(false);
+     setIsVerifying(false);
+     return;
+    }
+
+    console.log('[Reset Password] verifyOtp SUCCESS');
+    setIsSessionReady(true);
+    setIsVerifying(false);
+    window.history.replaceState({}, '', '/reset-password');
+    return;
+   }
+
+   // Flujo 2: code PKCE (fallback por si llega un code)
    if (code) {
-    console.log('[Reset Password] Code found, exchanging for session...');
+    console.log('[Reset Password] Code found, attempting exchange...');
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
@@ -50,13 +73,11 @@ export default function ResetPasswordPage() {
     console.log('[Reset Password] Code exchange SUCCESS');
     setIsSessionReady(true);
     setIsVerifying(false);
-
-    // Limpiar el code de la URL para evitar re-uso
     window.history.replaceState({}, '', '/reset-password');
     return;
    }
 
-   // 2. Si no hay code, verificar si ya existe una sesión activa
+   // Flujo 3: No hay token ni code, verificar sesión existente
    const { data: { session } } = await supabase.auth.getSession();
    if (session) {
     setIsSessionReady(true);
