@@ -27,24 +27,36 @@ export default function ResetPasswordPage() {
   logo_url: '',
  });
 
- // Escuchar el evento PASSWORD_RECOVERY de Supabase
- // Cuando el usuario llega desde el enlace del correo, Supabase procesa
- // los tokens del hash de la URL y emite este evento.
+ // Intercambiar el código PKCE en el lado del cliente
+ // El code_verifier está en las cookies del navegador (donde se generó al solicitar el reset).
+ // El servidor NO puede acceder a estas cookies correctamente, por eso lo hacemos aquí.
  useEffect(() => {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-   console.log('[Reset Password] Auth event:', event);
-   if (event === 'PASSWORD_RECOVERY') {
-    setIsSessionReady(true);
-    setIsVerifying(false);
-   } else if (event === 'SIGNED_IN') {
-    // También puede llegar como SIGNED_IN si la sesión ya se restauró
-    setIsSessionReady(true);
-    setIsVerifying(false);
-   }
-  });
+  const handleRecoveryFlow = async () => {
+   // 1. Verificar si hay un code en la URL (PKCE flow)
+   const urlParams = new URLSearchParams(window.location.search);
+   const code = urlParams.get('code');
 
-  // Verificar si ya hay una sesión activa (por si el evento ya se procesó)
-  const checkExistingSession = async () => {
+   if (code) {
+    console.log('[Reset Password] Code found, exchanging for session...');
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+     console.error('[Reset Password] Code exchange failed:', error.message);
+     setIsSessionReady(false);
+     setIsVerifying(false);
+     return;
+    }
+
+    console.log('[Reset Password] Code exchange SUCCESS');
+    setIsSessionReady(true);
+    setIsVerifying(false);
+
+    // Limpiar el code de la URL para evitar re-uso
+    window.history.replaceState({}, '', '/reset-password');
+    return;
+   }
+
+   // 2. Si no hay code, verificar si ya existe una sesión activa
    const { data: { session } } = await supabase.auth.getSession();
    if (session) {
     setIsSessionReady(true);
@@ -52,14 +64,19 @@ export default function ResetPasswordPage() {
    setIsVerifying(false);
   };
 
-  // Esperar un momento para que Supabase procese los tokens del hash
-  const timeout = setTimeout(() => {
-   checkExistingSession();
-  }, 1500);
+  // Escuchar eventos de autenticación como respaldo
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+   console.log('[Reset Password] Auth event:', event);
+   if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+    setIsSessionReady(true);
+    setIsVerifying(false);
+   }
+  });
+
+  handleRecoveryFlow();
 
   return () => {
    subscription.unsubscribe();
-   clearTimeout(timeout);
   };
  }, []);
 
