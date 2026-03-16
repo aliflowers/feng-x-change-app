@@ -20,10 +20,48 @@ export default function ResetPasswordPage() {
  const [error, setError] = useState<string | null>(null);
  const [message, setMessage] = useState<string | null>(null);
  const [loading, setLoading] = useState(false);
+ const [isSessionReady, setIsSessionReady] = useState(false);
+ const [isVerifying, setIsVerifying] = useState(true);
  const [businessConfig, setBusinessConfig] = useState<BusinessConfig>({
   business_name: 'Fengxchange',
   logo_url: '',
  });
+
+ // Escuchar el evento PASSWORD_RECOVERY de Supabase
+ // Cuando el usuario llega desde el enlace del correo, Supabase procesa
+ // los tokens del hash de la URL y emite este evento.
+ useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+   console.log('[Reset Password] Auth event:', event);
+   if (event === 'PASSWORD_RECOVERY') {
+    setIsSessionReady(true);
+    setIsVerifying(false);
+   } else if (event === 'SIGNED_IN') {
+    // También puede llegar como SIGNED_IN si la sesión ya se restauró
+    setIsSessionReady(true);
+    setIsVerifying(false);
+   }
+  });
+
+  // Verificar si ya hay una sesión activa (por si el evento ya se procesó)
+  const checkExistingSession = async () => {
+   const { data: { session } } = await supabase.auth.getSession();
+   if (session) {
+    setIsSessionReady(true);
+   }
+   setIsVerifying(false);
+  };
+
+  // Esperar un momento para que Supabase procese los tokens del hash
+  const timeout = setTimeout(() => {
+   checkExistingSession();
+  }, 1500);
+
+  return () => {
+   subscription.unsubscribe();
+   clearTimeout(timeout);
+  };
+ }, []);
 
  useEffect(() => {
   const loadBusinessConfig = async () => {
@@ -80,8 +118,43 @@ export default function ResetPasswordPage() {
    setError('Error al actualizar la contraseña. Intenta de nuevo.');
   } finally {
    setLoading(false);
-  }
- };
+   }
+  };
+
+ // Mostrar spinner mientras se verifica el token del enlace
+ if (isVerifying) {
+  return (
+   <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="flex flex-col items-center gap-4">
+     <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#05294F] border-t-transparent"></div>
+     <p className="text-gray-500 font-medium">Verificando enlace de recuperación...</p>
+    </div>
+   </main>
+  );
+ }
+
+ // Mostrar error si no se pudo establecer la sesión
+ if (!isSessionReady) {
+  return (
+   <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 max-w-md text-center">
+     <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <span className="text-red-500 text-2xl">!</span>
+     </div>
+     <h2 className="text-xl font-bold text-gray-900 mb-2">Enlace inválido o expirado</h2>
+     <p className="text-gray-500 mb-6">
+      El enlace de restablecimiento de contraseña ha expirado o ya fue utilizado. Por favor, solicita uno nuevo.
+     </p>
+     <Link
+      href="/forgot-password"
+      className="inline-block bg-gradient-to-r from-[#05294F] to-[#07478F] text-white font-semibold py-3 px-6 rounded-xl no-underline hover:opacity-90 transition-opacity"
+     >
+      Solicitar nuevo enlace
+     </Link>
+    </div>
+   </main>
+  );
+ }
 
  return (
   <main className="min-h-screen flex">
