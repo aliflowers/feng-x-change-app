@@ -19,6 +19,11 @@ export async function GET(request: NextRequest) {
  // Si no hay "next", por defecto enviamos al login con mensaje de éxito
  const next = requestUrl.searchParams.get('next') ?? '/login?verified=true';
 
+ // DEBUG: Registrar la URL completa que llega al callback para diagnosticar problemas
+ console.log('[Auth Callback] Full URL:', request.url);
+ console.log('[Auth Callback] code:', code ? 'present' : 'MISSING');
+ console.log('[Auth Callback] next:', next);
+
  // En Railway / Vercel el request.url a veces usa "localhost" por el proxy interno.
  // Usamos la variable de entorno NEXT_PUBLIC_SITE_URL configurada localmente / en Railway.
  // Si no existe, hace un fallback al origin de la petición.
@@ -56,12 +61,22 @@ export async function GET(request: NextRequest) {
    // Si el intercambio es exitoso, redirigir a la página deseada
    // Usamos safeOrigin para redirigir siempre al dominio seguro y correcto
    const safeNext = next.startsWith('/') ? next : `/${next}`;
+   console.log('[Auth Callback] SUCCESS - Redirecting to:', `${safeOrigin}${safeNext}`);
    return NextResponse.redirect(`${safeOrigin}${safeNext}`);
   } else {
-   console.error('Auth Callback Error:', error);
+   console.error('[Auth Callback] exchangeCodeForSession FAILED:', error.message, error);
+   
+   // Si el destino era reset-password y falló, enviar al forgot-password con error específico
+   if (next.includes('reset-password')) {
+    const errorMsg = encodeURIComponent('El enlace de restablecimiento ha expirado o ya fue utilizado. Por favor, solicita uno nuevo.');
+    return NextResponse.redirect(`${safeOrigin}/forgot-password?error=${errorMsg}`);
+   }
   }
+ } else {
+  console.error('[Auth Callback] No code parameter found in URL');
  }
 
  // Si no hay código o falla el intercambio, redirigir a login con error
- return NextResponse.redirect(`${safeOrigin}/login?error=auth_code_error`);
+ const errorMsg = encodeURIComponent('El enlace de autenticación es inválido o ha expirado.');
+ return NextResponse.redirect(`${safeOrigin}/login?error=${errorMsg}`);
 }

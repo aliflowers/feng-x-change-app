@@ -26,11 +26,18 @@ function LoginPage() {
     logo_url: '',
   });
 
-  // Detectar razón de logout por inactividad
+  // Detectar razón de logout por inactividad o errores del callback de autenticación
   useEffect(() => {
     const reason = searchParams.get('reason');
+    const authError = searchParams.get('error');
+    const verified = searchParams.get('verified');
+
     if (reason === 'inactivity') {
       setSessionMessage('Por seguridad, tu sesión ha sido cerrada debido a inactividad prolongada.');
+    } else if (authError) {
+      setError(decodeURIComponent(authError));
+    } else if (verified === 'true') {
+      setSessionMessage('¡Tu cuenta ha sido verificada exitosamente! Ya puedes iniciar sesión.');
     }
   }, [searchParams]);
 

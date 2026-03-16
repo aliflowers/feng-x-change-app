@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Mail, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 
@@ -11,6 +12,7 @@ interface BusinessConfig {
 }
 
 export default function ForgotPasswordPage() {
+ const searchParams = useSearchParams();
  const [email, setEmail] = useState('');
  const [error, setError] = useState<string | null>(null);
  const [message, setMessage] = useState<string | null>(null);
@@ -19,6 +21,14 @@ export default function ForgotPasswordPage() {
   business_name: 'Fengxchange',
   logo_url: '',
  });
+
+ // Detectar error del callback de autenticación (enlace expirado o ya usado)
+ useEffect(() => {
+  const authError = searchParams.get('error');
+  if (authError) {
+   setError(decodeURIComponent(authError));
+  }
+ }, [searchParams]);
 
  useEffect(() => {
   const loadBusinessConfig = async () => {
