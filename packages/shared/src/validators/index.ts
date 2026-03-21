@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import type { BeneficiaryAccountCase, BeneficiaryUsdtNetwork } from '../types/user-bank-account';
 import {
  UserRole,
  TransactionStatus,
@@ -124,26 +125,134 @@ export const rejectTransactionSchema = z.object({
 // USER BANK ACCOUNT VALIDATORS
 // ============================================
 
-export const createUserBankAccountSchema = z.object({
- bank_platform_id: z.number().positive(),
- account_number: z.string().min(5).max(50),
- account_holder: z.string().min(3).max(100),
- document_number: z.string().min(4).max(20),
- account_type: z.string().optional(), // Ahora opcional, se asigna automáticamente
- email: z.string().email().optional().or(z.literal('')),
- alias: z.string().max(50).optional(),
-});
+const beneficiaryAccountCaseValues = [
+ 'STANDARD_BANK',
+ 'US_BANK',
+ 'MOBILE_WALLET',
+ 'USDT_WALLET',
+ 'BINANCE_PAY',
+] as const satisfies readonly BeneficiaryAccountCase[];
 
-export const updateUserBankAccountSchema = z.object({
- bank_platform_id: z.number().positive().optional(),
- account_number: z.string().min(5).max(50).optional(),
- account_holder: z.string().min(3).max(100).optional(),
- document_number: z.string().min(4).max(20).optional(),
- account_type: z.string().optional(),
- email: z.string().email().optional().or(z.literal('')),
- alias: z.string().max(50).optional(),
- is_active: z.boolean().optional(),
-});
+const beneficiaryUsdtNetworkValues = [
+ 'TRC20',
+ 'ERC20',
+ 'BEP20',
+ 'POLYGON',
+ 'SOL',
+ 'ARBITRUM',
+ 'TON',
+ 'OTHER',
+] as const satisfies readonly BeneficiaryUsdtNetwork[];
+
+const optionalText = (maxLength = 200) =>
+ z.preprocess(
+  (value) => {
+   if (typeof value !== 'string') return value;
+   const normalized = value.trim();
+   return normalized.length === 0 ? undefined : normalized;
+  },
+  z.string().max(maxLength).optional()
+ );
+
+const optionalEmail = z.preprocess(
+ (value) => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim();
+  return normalized.length === 0 ? undefined : normalized;
+ },
+ z.string().email().optional()
+);
+
+/**
+ * Construye un esquema flexible para beneficiarios con reglas condicionales.
+ * Mantiene compatibilidad con el payload histórico (`account_number`, `document_number`)
+ * e incorpora reglas para ABA, USDT y Binance Pay.
+ */
+export const createUserBankAccountSchema = z
+ .object({
+  bank_platform_id: z.number().positive(),
+  account_number: z.string().trim().min(1).max(120),
+  account_holder: z.string().trim().min(3).max(100),
+  document_number: optionalText(20),
+  document_type: optionalText(40),
+  account_type: optionalText(30), // Opcional, puede asignarse automáticamente
+  email: optionalEmail,
+  alias: optionalText(50),
+  pago_movil_phone: z.string().regex(/^\d{11}$/).optional(),
+  pago_movil_bank_code: z.string().regex(/^\d{4}$/).optional(),
+  aba_routing_number: z.string().regex(/^\d{9}$/).optional(),
+  usdt_network: z.enum(beneficiaryUsdtNetworkValues).optional(),
+  wallet_address: optionalText(120),
+  binance_pay_uid: optionalText(120),
+  beneficiary_case: z.enum(beneficiaryAccountCaseValues).optional(),
+  hide_document: z.boolean().optional(),
+  requires_document: z.boolean().optional(),
+ })
+ .superRefine((data, ctx) => {
+  const shouldHideDocument = data.hide_document === true;
+  const shouldRequireDocument = data.requires_document !== false;
+
+  if (!shouldHideDocument && shouldRequireDocument && !data.document_number) {
+   ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['document_number'],
+    message: 'El número de documento es obligatorio para este beneficiario',
+   });
+  }
+
+  if (data.beneficiary_case === 'US_BANK' && !data.aba_routing_number) {
+   ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['aba_routing_number'],
+    message: 'El ABA routing number es obligatorio para cuentas bancarias de USA',
+   });
+  }
+
+  if (data.beneficiary_case === 'USDT_WALLET') {
+   if (!data.usdt_network) {
+    ctx.addIssue({
+     code: z.ZodIssueCode.custom,
+     path: ['usdt_network'],
+     message: 'La red de USDT es obligatoria',
+    });
+   }
+
+   if (!data.wallet_address) {
+    ctx.addIssue({
+     code: z.ZodIssueCode.custom,
+     path: ['wallet_address'],
+     message: 'La dirección de wallet USDT es obligatoria',
+    });
+   }
+  }
+
+ });
+
+/**
+ * Variante para actualización parcial de beneficiarios.
+ * Soporta los mismos campos extendidos sin forzar presencia de todos.
+ */
+export const updateUserBankAccountSchema = z
+ .object({
+  bank_platform_id: z.number().positive().optional(),
+  account_number: z.string().trim().min(1).max(120).optional(),
+  account_holder: z.string().trim().min(3).max(100).optional(),
+  document_number: optionalText(20),
+  document_type: optionalText(40),
+  account_type: optionalText(30),
+  email: optionalEmail,
+  alias: optionalText(50),
+  is_active: z.boolean().optional(),
+  pago_movil_phone: z.string().regex(/^\d{11}$/).optional(),
+  pago_movil_bank_code: z.string().regex(/^\d{4}$/).optional(),
+  aba_routing_number: z.string().regex(/^\d{9}$/).optional(),
+  usdt_network: z.enum(beneficiaryUsdtNetworkValues).optional(),
+  wallet_address: optionalText(120),
+  binance_pay_uid: optionalText(120),
+  beneficiary_case: z.enum(beneficiaryAccountCaseValues).optional(),
+  hide_document: z.boolean().optional(),
+  requires_document: z.boolean().optional(),
+ });
 
 // ============================================
 // PROFIT CONFIG VALIDATORS

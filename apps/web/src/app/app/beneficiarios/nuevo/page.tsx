@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, User, Hash, CreditCard, ChevronDown, CheckCircle2, AlertCircle, Loader2, Phone } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowLeft, Save, Building, User, Hash, CreditCard, ChevronDown, CheckCircle2, AlertCircle, Loader2, Phone, Mail, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { z } from 'zod';
 import { createUserBankAccountSchema } from '@fengxchange/shared/validators';
@@ -70,6 +71,33 @@ const FlagIcon = ({ code, size = 40 }: { code: string; size?: number }) => {
         <rect fill="#fff" x="30" y="20" width="30" height="20" />
         <text x="45" y="34" fill="#DA121A" fontSize="10" textAnchor="middle">★</text>
       </svg>
+    ),
+    PAYPAL: (
+      <Image
+        src="/flags/PayPal.svg"
+        alt="PayPal"
+        width={size}
+        height={Math.round(size * 0.67)}
+        className="rounded shadow-sm object-contain bg-white p-1"
+      />
+    ),
+    ZINLI: (
+      <Image
+        src="/flags/Zinli.jpg"
+        alt="Zinli"
+        width={size}
+        height={Math.round(size * 0.67)}
+        className="rounded shadow-sm object-contain bg-white p-1"
+      />
+    ),
+    USDT: (
+      <Image
+        src="/flags/usdt.svg"
+        alt="USDT"
+        width={size}
+        height={Math.round(size * 0.67)}
+        className="rounded shadow-sm object-contain bg-white p-1"
+      />
     ),
   };
   return flags[code] || <div className="w-10 h-7 bg-gray-200 rounded flex items-center justify-center text-xs">💱</div>;
@@ -210,6 +238,23 @@ const currencyToCountryMap: Record<string, string> = {
   'PAB': 'PA',
   'USD': 'US',
   'EUR': 'EU',
+};
+
+const PHONE_ONLY_WALLETS = ['Nequi', 'DaviPlata', 'Yape', 'Plin'];
+const PAYPAL_ZINLI_WALLETS = ['PayPal', 'Zinli'];
+const USD_BANKS_WITH_ABA = ['Bank of America', 'Chase', 'Wells Fargo', 'City Bank', 'Citibank'];
+const AUTO_PLATFORM_BY_CURRENCY: Record<string, string> = {
+  PAYPAL: 'PayPal',
+  ZINLI: 'Zinli',
+};
+
+const getPlatformIconPath = (bankName?: string): string | null => {
+  if (!bankName) return null;
+  const normalizedName = bankName.toLowerCase();
+  if (normalizedName.includes('paypal')) return '/flags/PayPal.svg';
+  if (normalizedName.includes('zinli')) return '/flags/Zinli.jpg';
+  if (normalizedName.includes('usdt')) return '/flags/usdt.svg';
+  return null;
 };
 
 // Componente personalizado de selección de tipo de documento
@@ -354,6 +399,8 @@ export default function NewBeneficiaryPage() {
     alias: '',
     pago_movil_phone: '',
     pago_movil_bank_code: '',
+    aba_routing_number: '',
+    usdt_network: 'TRC20',
   });
 
   // Load Data
@@ -374,25 +421,72 @@ export default function NewBeneficiaryPage() {
     loadData();
   }, []);
 
-  const currentCurrencyCode = currencies.find(c => c.id === selectedCurrency)?.code;
+  const selectedCurrencyCode = currencies.find(c => c.id === selectedCurrency)?.code;
+  const usdCurrencyId = currencies.find(c => c.code === 'USD')?.id ?? 0;
+  const currentCurrencyCode = AUTO_PLATFORM_BY_CURRENCY[selectedCurrencyCode || ''] ? 'USD' : selectedCurrencyCode;
   const availableBanks = banks.filter(b => b.currency_code === currentCurrencyCode);
+
+  useEffect(() => {
+    if (!selectedCurrencyCode) return;
+
+    const preferredPlatform = AUTO_PLATFORM_BY_CURRENCY[selectedCurrencyCode];
+    if (!preferredPlatform) return;
+
+    const preferredBank = banks.find(
+      bank =>
+        bank.currency_code === currentCurrencyCode &&
+        bank.name.toLowerCase() === preferredPlatform.toLowerCase()
+    );
+
+    if (!preferredBank) return;
+
+    setFormData(prev =>
+      prev.bank_id === preferredBank.id.toString()
+        ? prev
+        : { ...prev, bank_id: preferredBank.id.toString() }
+    );
+  }, [banks, currentCurrencyCode, selectedCurrencyCode]);
 
   // Banco seleccionado actual
   const selectedBank = banks.find(b => b.id.toString() === formData.bank_id);
+  const hasSelectedBank = Boolean(selectedBank);
   const isPagoMovil = selectedBank?.name === 'Pago Móvil';
-  const isDigitalWallet = ['Nequi', 'DaviPlata', 'Yape', 'Plin', 'Zinli', 'Binance Pay', 'PayPal', 'Zelle', 'Venmo', 'CashApp'].includes(selectedBank?.name || '');
+  const selectedBankName = selectedBank?.name || '';
+  const isUsdtCurrency = currentCurrencyCode === 'USDT';
+  const isDigitalWallet = ['Nequi', 'DaviPlata', 'Yape', 'Plin', 'Zinli', 'Binance Pay', 'PayPal', 'Zelle', 'Venmo', 'CashApp', 'USDT'].includes(selectedBankName) || isUsdtCurrency;
+  const isPhoneOnlyWallet = PHONE_ONLY_WALLETS.includes(selectedBankName);
+  const isPaypalOrZinli = PAYPAL_ZINLI_WALLETS.includes(selectedBankName);
+  const isZelle = selectedBankName === 'Zelle';
+  const isBinancePay = selectedBankName === 'Binance Pay';
+  const isUsdtWallet = isUsdtCurrency && !isBinancePay;
+  const isUsdtWithoutBankFlow = isUsdtCurrency && availableBanks.length === 0;
+  const isUsaBank = currentCurrencyCode === 'USD' && USD_BANKS_WITH_ABA.includes(selectedBankName);
+  const shouldHideDocumentFields = isUsdtCurrency || isBinancePay || isZelle || isPaypalOrZinli || isUsaBank;
+  const selectedPlatformIconPath = getPlatformIconPath(selectedBankName);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+
+    if (!formData.bank_id && !isUsdtWithoutBankFlow) {
+      newErrors.bank_id = 'Selecciona un banco o plataforma para continuar.';
+    }
 
     // Base Validation using Shared Schema
     const result = createUserBankAccountSchema.safeParse({
       bank_platform_id: parseInt(formData.bank_id) || 1,
       account_number: isPagoMovil ? 'PAGO_MOVIL' : formData.account_number,
       account_holder: formData.account_holder,
-      document_number: formData.document_number,
+      document_number: shouldHideDocumentFields ? undefined : formData.document_number,
+      document_type: shouldHideDocumentFields ? undefined : formData.document_type,
       email: formData.email,
       alias: formData.alias,
+      beneficiary_case: isUsdtWallet ? 'USDT_WALLET' : isBinancePay ? 'BINANCE_PAY' : isUsaBank ? 'US_BANK' : 'STANDARD_BANK',
+      hide_document: shouldHideDocumentFields,
+      requires_document: !shouldHideDocumentFields,
+      aba_routing_number: isUsaBank ? formData.aba_routing_number : undefined,
+      usdt_network: isUsdtWallet ? formData.usdt_network : undefined,
+      wallet_address: isUsdtWallet ? formData.account_number : undefined,
+      binance_pay_uid: isBinancePay && /^\d{6,20}$/.test(formData.account_number.trim()) ? formData.account_number.trim() : undefined,
     });
 
     if (!result.success) {
@@ -427,10 +521,36 @@ export default function NewBeneficiaryPage() {
     }
 
     if (currentCurrencyCode === 'USD') {
-      // Usually email for wallets
-      if (!formData.account_number.includes('@') && formData.account_number.length < 5) {
-        // Assume it might be an ID if not email, but usually wallets are emails
-        // newErrors.account_number = 'Debe ser un correo o ID válido';
+      if (isZelle) {
+        const isEmail = z.string().email().safeParse(formData.account_number.trim()).success;
+        const isInternationalPhone = /^\+?[1-9]\d{9,14}$/.test(formData.account_number.replace(/\s+/g, ''));
+        if (!isEmail && !isInternationalPhone) {
+          newErrors.account_number = 'Para Zelle usa un correo válido o un teléfono internacional válido.';
+        }
+      }
+
+      if (isUsaBank && !/^\d{6,17}$/.test(formData.account_number)) {
+        newErrors.account_number = 'Para bancos USA usa solo números (entre 6 y 17 dígitos).';
+      }
+
+      if (isUsaBank && !/^\d{9}$/.test(formData.aba_routing_number)) {
+        newErrors.aba_routing_number = 'El ABA routing debe tener 9 dígitos numéricos.';
+      }
+
+      if (isPaypalOrZinli && !z.string().email().safeParse(formData.account_number.trim()).success) {
+        newErrors.account_number = 'Ingresa un correo electrónico válido para PayPal/Zinli.';
+      }
+    }
+
+    if (isUsdtWallet && !/^[A-Za-z0-9]{24,120}$/.test(formData.account_number.trim())) {
+      newErrors.account_number = 'Ingresa una dirección USDT válida (sin espacios).';
+    }
+
+    if (isBinancePay) {
+      const isEmail = z.string().email().safeParse(formData.account_number.trim()).success;
+      const isNumericId = /^\d{6,20}$/.test(formData.account_number.trim());
+      if (!isEmail && !isNumericId) {
+        newErrors.account_number = 'Ingresa un correo de Binance válido o un ID numérico válido.';
       }
     }
 
@@ -451,13 +571,17 @@ export default function NewBeneficiaryPage() {
       // Prepare payload
       const payload: Record<string, unknown> = {
         user_id: user.id,
-        bank_id: parseInt(formData.bank_id),
+        bank_id: isUsdtWithoutBankFlow ? null : parseInt(formData.bank_id),
         account_holder: formData.account_holder,
-        document_type: formData.document_type || null,
-        document_number: formData.document_number,
+        document_type: shouldHideDocumentFields ? null : (formData.document_type || null),
+        document_number: shouldHideDocumentFields ? null : formData.document_number,
         account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : 'SAVINGS',
         email: formData.email || null,
         alias: formData.alias || null,
+        aba_routing_number: isUsaBank ? formData.aba_routing_number || null : null,
+        usdt_network: isUsdtWallet ? formData.usdt_network : null,
+        wallet_address: isUsdtWallet ? formData.account_number : null,
+        binance_pay_uid: isBinancePay && /^\d{6,20}$/.test(formData.account_number.trim()) ? formData.account_number.trim() : null,
         is_active: true
       };
 
@@ -502,6 +626,21 @@ export default function NewBeneficiaryPage() {
       value = value.replace(/\D/g, '').slice(0, 10);
     }
 
+    // Para bancos USA tradicionales: solo numérico, hasta 17 dígitos
+    if (name === 'account_number' && isUsaBank) {
+      value = value.replace(/\D/g, '').slice(0, 17);
+    }
+
+    // Para ABA Routing USA: solo numérico, 9 dígitos
+    if (name === 'aba_routing_number') {
+      value = value.replace(/\D/g, '').slice(0, 9);
+    }
+
+    // Para USDT: sin espacios
+    if (name === 'account_number' && isUsdtWallet) {
+      value = value.replace(/\s/g, '');
+    }
+
     // Para document_number, solo permitir dígitos numéricos
     // Para VES, limitar a 9 dígitos máximo
     if (name === 'document_number') {
@@ -514,6 +653,18 @@ export default function NewBeneficiaryPage() {
     // Si cambia el banco, actualizar prefijo de cuenta para bancos VES
     if (name === 'bank_id' && value) {
       const bank = banks.find(b => b.id.toString() === value);
+      const preferredPlatform = selectedCurrencyCode ? AUTO_PLATFORM_BY_CURRENCY[selectedCurrencyCode] : undefined;
+
+      if (
+        preferredPlatform &&
+        bank &&
+        bank.name.toLowerCase() !== preferredPlatform.toLowerCase() &&
+        usdCurrencyId > 0 &&
+        selectedCurrency !== usdCurrencyId
+      ) {
+        setSelectedCurrency(usdCurrencyId);
+      }
+
       if (bank?.code && currentCurrencyCode === 'VES') {
         // Agregar prefijo automático solo si el campo está vacío o tiene un prefijo anterior
         setFormData(prev => {
@@ -571,7 +722,18 @@ export default function NewBeneficiaryPage() {
                   <button
                     key={currency.id}
                     type="button"
-                    onClick={() => { setSelectedCurrency(currency.id); setFormData(prev => ({ ...prev, bank_id: '' })); setErrors({}); }}
+                    onClick={() => {
+                      setSelectedCurrency(currency.id);
+                      setFormData(prev => ({
+                        ...prev,
+                        bank_id: '',
+                        account_number: '',
+                        document_type: '',
+                        document_number: '',
+                        aba_routing_number: '',
+                      }));
+                      setErrors({});
+                    }}
                     className={`relative group flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all duration-300 bg-white ${isSelected
                       ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 shadow-lg'
                       : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
@@ -623,7 +785,7 @@ export default function NewBeneficiaryPage() {
                           name="bank_id"
                           value={formData.bank_id}
                           onChange={handleChange}
-                          className={`input appearance-none w-full pl-10 ${errors.bank_id ? 'border-red-500 focus:ring-red-200' : ''}`}
+                          className={`input appearance-none w-full pl-14 ${errors.bank_id ? 'border-red-500 focus:ring-red-200' : ''}`}
                           required
                         >
                           <option value="">Selecciona una opción</option>
@@ -631,9 +793,25 @@ export default function NewBeneficiaryPage() {
                             <option key={bank.id} value={bank.id}>{bank.name}</option>
                           ))}
                         </select>
-                        <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                        {selectedPlatformIconPath ? (
+                          <Image
+                            src={selectedPlatformIconPath}
+                            alt={selectedBankName}
+                            width={20}
+                            height={20}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-sm object-contain pointer-events-none"
+                          />
+                        ) : (
+                          <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                        )}
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                       </div>
+                      {selectedPlatformIconPath && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                          <Image src={selectedPlatformIconPath} alt={selectedBankName} width={16} height={16} className="rounded-sm object-contain" />
+                          <span>Plataforma seleccionada: {selectedBankName}</span>
+                        </div>
+                      )}
 
                     </div>
                   )}
@@ -641,7 +819,13 @@ export default function NewBeneficiaryPage() {
                 </div>
 
                 {/* Campos dinámicos según tipo de plataforma */}
-                {isPagoMovil ? (
+                {!hasSelectedBank && !isUsdtWithoutBankFlow ? (
+                  <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                    <p className="text-sm text-blue-700">
+                      Selecciona primero un banco o plataforma para mostrar los campos correctos del beneficiario.
+                    </p>
+                  </div>
+                ) : isPagoMovil ? (
                   /* PAGO MÓVIL - Campos específicos */
                   <>
                     <div className="space-y-1.5">
@@ -682,92 +866,165 @@ export default function NewBeneficiaryPage() {
                   </>
                 ) : isDigitalWallet ? (
                   /* BILLETERAS DIGITALES - Email o teléfono */
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      {['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '')
-                        ? 'Número de Teléfono'
-                        : 'Correo Electrónico o ID'}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '') ? 'tel' : 'text'}
-                        inputMode={['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '') ? 'numeric' : undefined}
-                        maxLength={selectedBank?.name === 'Nequi' ? 10 : undefined}
-                        name="account_number"
-                        value={formData.account_number}
-                        onChange={handleChange}
-                        className={`input pl-10 w-full ${errors.account_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                        placeholder={selectedBank?.name === 'Nequi' ? '3001234567' :
-                          ['DaviPlata'].includes(selectedBank?.name || '') ? '3001234567' :
-                            ['Yape', 'Plin'].includes(selectedBank?.name || '') ? '912345678' : 'correo@ejemplo.com'}
-                      />
-                      {['Nequi', 'DaviPlata', 'Yape', 'Plin'].includes(selectedBank?.name || '')
-                        ? <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        : <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />}
+                  <>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {isPhoneOnlyWallet ? 'Número de Teléfono' :
+                          isZelle ? 'Correo Electrónico o Número de Teléfono (Zelle)' :
+                            isPaypalOrZinli ? 'Correo Electrónico (PayPal/Zinli)' :
+                              isUsdtWallet ? 'Dirección de Wallet USDT' :
+                                isBinancePay ? 'Correo Electrónico de Binance o ID' :
+                                  'Correo Electrónico o Número de Teléfono'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={isPhoneOnlyWallet || isUsaBank ? 'tel' : isPaypalOrZinli ? 'email' : 'text'}
+                          inputMode={isPhoneOnlyWallet || isUsaBank ? 'numeric' : undefined}
+                          maxLength={selectedBank?.name === 'Nequi' ? 10 : isUsaBank ? 17 : isBinancePay ? 80 : undefined}
+                          name="account_number"
+                          value={formData.account_number}
+                          onChange={handleChange}
+                          className={`input pl-10 w-full ${errors.account_number ? 'border-red-500 focus:ring-red-200' : ''}`}
+                          placeholder={selectedBank?.name === 'Nequi' ? '3001234567' :
+                            selectedBank?.name === 'DaviPlata' ? '3001234567' :
+                              ['Yape', 'Plin'].includes(selectedBank?.name || '') ? '912345678' :
+                                isZelle ? 'correo@ejemplo.com o +13051234567' :
+                                  isPaypalOrZinli ? 'correo@ejemplo.com' :
+                                    isUsdtWallet ? 'TRXx... / 0x...' :
+                                      isBinancePay ? 'binance@correo.com o 123456789' : 'correo@ejemplo.com'}
+                        />
+                        {isPhoneOnlyWallet ? (
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        ) : isPaypalOrZinli ? (
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        ) : isUsdtWallet ? (
+                          <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        ) : isBinancePay ? (
+                          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        ) : (
+                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        )}
+                      </div>
+                      {errors.account_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.account_number}</p>}
+                      {selectedBank?.name === 'Nequi' && <p className="text-xs text-gray-400">Número de celular de 10 dígitos</p>}
+                      {isZelle && <p className="text-xs text-gray-400">Acepta correo o teléfono internacional en formato +1...</p>}
+                      {isPaypalOrZinli && <p className="text-xs text-gray-400">Debe ser el correo principal de la cuenta.</p>}
+                      {isUsdtWallet && <p className="text-xs text-gray-400">Pega la dirección completa de tu wallet USDT (sin espacios).</p>}
+                      {isBinancePay && <p className="text-xs text-gray-400">Puedes usar correo de Binance o ID numérico.</p>}
                     </div>
-                    {errors.account_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.account_number}</p>}
-                    {selectedBank?.name === 'Nequi' && <p className="text-xs text-gray-400">Número de celular de 10 dígitos</p>}
-                  </div>
+                    {isUsdtWallet && (
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-sm font-medium text-gray-700">Red de USDT</label>
+                        <div className="relative">
+                          <select
+                            name="usdt_network"
+                            value={formData.usdt_network}
+                            onChange={handleChange}
+                            className="input appearance-none w-full pl-10"
+                          >
+                            <option value="TRC20">TRC20</option>
+                            <option value="ERC20">ERC20</option>
+                            <option value="BEP20">BEP20</option>
+                            <option value="POLYGON">POLYGON</option>
+                            <option value="SOL">SOL</option>
+                            <option value="ARBITRUM">ARBITRUM</option>
+                            <option value="TON">TON</option>
+                            <option value="OTHER">OTHER</option>
+                          </select>
+                          <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   /* BANCO NORMAL - Número de cuenta */
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-sm font-medium text-gray-700">
-                      {currentCurrencyCode === 'USD' ? 'Correo Electrónico / ID' : 'Número de Cuenta'}
+                      {isUsaBank ? 'Número de Cuenta Bancaria (USA)' :
+                        currentCurrencyCode === 'USD' ? 'Correo Electrónico / ID' : 'Número de Cuenta'}
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        inputMode={currentCurrencyCode === 'VES' || selectedBank?.name === 'Bancolombia' ? 'numeric' : undefined}
-                        maxLength={currentCurrencyCode === 'VES' ? 20 : selectedBank?.name === 'Bancolombia' ? 11 : undefined}
+                        inputMode={currentCurrencyCode === 'VES' || selectedBank?.name === 'Bancolombia' || isUsaBank ? 'numeric' : undefined}
+                        maxLength={currentCurrencyCode === 'VES' ? 20 : selectedBank?.name === 'Bancolombia' ? 11 : isUsaBank ? 17 : undefined}
                         name="account_number"
                         value={formData.account_number}
                         onChange={handleChange}
                         className={`input pl-10 w-full font-mono ${errors.account_number ? 'border-red-500 focus:ring-red-200' : ''}`}
                         placeholder={currentCurrencyCode === 'VES' ? '01020000000000000000' :
-                          selectedBank?.name === 'Bancolombia' ? '12345678901' : ''}
+                          selectedBank?.name === 'Bancolombia' ? '12345678901' :
+                            isUsaBank ? '123456789012' : ''}
                       />
                       <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                     {errors.account_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.account_number}</p>}
                     {currentCurrencyCode === 'VES' && !isPagoMovil && <p className="text-xs text-gray-400">Debe tener 20 dígitos numéricos. Los primeros 4 son el código del banco.</p>}
                     {selectedBank?.name === 'Bancolombia' && <p className="text-xs text-gray-400">Número de cuenta de 11 dígitos numéricos</p>}
+                    {isUsaBank && <p className="text-xs text-gray-400">Usa entre 6 y 17 dígitos numéricos.</p>}
+                  </div>
+                )}
+
+                {hasSelectedBank && isUsaBank && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-sm font-medium text-gray-700">ABA Routing Number</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="aba_routing_number"
+                        value={formData.aba_routing_number}
+                        onChange={handleChange}
+                        maxLength={9}
+                        className={`input pl-10 w-full font-mono ${errors.aba_routing_number ? 'border-red-500 focus:ring-red-200' : ''}`}
+                        placeholder="021000021"
+                      />
+                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    </div>
+                    {errors.aba_routing_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.aba_routing_number}</p>}
+                    <p className="text-xs text-gray-400">Código bancario de 9 dígitos para transferencias ACH/Wire en USA.</p>
                   </div>
                 )}
 
                 {/* Campo Tipo de Cuenta eliminado - se asigna automáticamente */}
 
-                {/* Tipo de Documento - Componente personalizado con banderas */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Tipo de Documento</label>
-                  <DocumentTypeSelect
-                    value={formData.document_type}
-                    onChange={(value) => setFormData(prev => ({ ...prev, document_type: value }))}
-                    currencyCode={currentCurrencyCode}
-                  />
-                </div>
+                {hasSelectedBank && !shouldHideDocumentFields && (
+                  <>
+                    {/* Tipo de Documento - Componente personalizado con banderas */}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-gray-700">Tipo de Documento</label>
+                      <DocumentTypeSelect
+                        value={formData.document_type}
+                        onChange={(value) => setFormData(prev => ({ ...prev, document_type: value }))}
+                        currencyCode={currentCurrencyCode}
+                      />
+                    </div>
 
-                {/* Número de Documento */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Número de Documento</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      name="document_number"
-                      value={formData.document_number}
-                      onChange={handleChange}
-                      maxLength={currentCurrencyCode === 'VES' ? 9 : undefined}
-                      className={`input pl-10 w-full ${errors.document_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                      placeholder={formData.document_type ? (currentCurrencyCode === 'VES' ? 'Ej: 12345678' : 'Ej: 12345678') : 'Selecciona tipo primero'}
-                    />
-                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  </div>
-                  {errors.document_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.document_number}</p>}
-                </div>
+                    {/* Número de Documento */}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-gray-700">Número de Documento</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          name="document_number"
+                          value={formData.document_number}
+                          onChange={handleChange}
+                          maxLength={currentCurrencyCode === 'VES' ? 9 : undefined}
+                          className={`input pl-10 w-full ${errors.document_number ? 'border-red-500 focus:ring-red-200' : ''}`}
+                          placeholder={formData.document_type ? (currentCurrencyCode === 'VES' ? 'Ej: 12345678' : 'Ej: 12345678') : 'Selecciona tipo primero'}
+                        />
+                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      </div>
+                      {errors.document_number && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {errors.document_number}</p>}
+                    </div>
+                  </>
+                )}
 
                 {/* Nombre Titular */}
                 <div className="space-y-1.5 md:col-span-2">
-                  <label className="text-sm font-medium text-gray-700">Nombre del Titular</label>
+                  <label className="text-sm font-medium text-gray-700">Nombre y Apellido del Titular</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -775,7 +1032,7 @@ export default function NewBeneficiaryPage() {
                       value={formData.account_holder}
                       onChange={handleChange}
                       className={`input pl-10 w-full ${errors.account_holder ? 'border-red-500 focus:ring-red-200' : ''}`}
-                      placeholder="Nombre Apellido"
+                      placeholder="Nombre y Apellido"
                     />
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>

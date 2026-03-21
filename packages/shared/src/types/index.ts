@@ -62,6 +62,8 @@ export type {
  UserBankAccount,
  CreateUserBankAccountInput,
  UpdateUserBankAccountInput,
+ BeneficiaryAccountCase,
+ BeneficiaryUsdtNetwork,
 } from './user-bank-account';
 
 // Commission
