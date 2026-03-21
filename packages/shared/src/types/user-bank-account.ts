@@ -28,6 +28,12 @@ export interface UserBankAccount {
  alias: string | null;
  /** Si la cuenta está activa */
  is_active: boolean;
+ /** Tipo de documento (CI-V, CI-E, RIF-J, RIF-G, etc.) */
+ document_type?: string | null;
+ /** Teléfono para Pago Móvil (11 dígitos) */
+ pago_movil_phone?: string | null;
+ /** Código de banco para Pago Móvil (4 dígitos) */
+ pago_movil_bank_code?: string | null;
 }
 
 /**
@@ -38,9 +44,12 @@ export interface CreateUserBankAccountInput {
  account_number: string;
  account_holder: string;
  document_number: string;
- account_type?: string; // Ahora opcional, se asigna automáticamente
+ account_type?: string;
  email?: string;
  alias?: string;
+ document_type?: string;
+ pago_movil_phone?: string;
+ pago_movil_bank_code?: string;
 }
 
 /**
@@ -55,4 +64,7 @@ export interface UpdateUserBankAccountInput {
  email?: string;
  alias?: string;
  is_active?: boolean;
+ document_type?: string;
+ pago_movil_phone?: string;
+ pago_movil_bank_code?: string;
 }
