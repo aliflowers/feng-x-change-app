@@ -212,7 +212,11 @@ function LoginPage() {
 
             {/* Mensaje de sesión expirada */}
             {sessionMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center gap-3">
+              <div
+                className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center gap-3"
+                role="status"
+                aria-live="polite"
+              >
                 <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-amber-600 font-bold">!</span>
                 </div>
@@ -223,7 +227,11 @@ function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Error */}
               {error && (
-                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3">
+                <div
+                  className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-3"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-red-500">!</span>
                   </div>
@@ -245,6 +253,12 @@ function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="next"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 text-gray-900 focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
                     placeholder="tu@email.com"
                     required
@@ -266,6 +280,8 @@ function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    enterKeyHint="done"
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 pl-12 pr-12 text-gray-900 focus:ring-2 focus:ring-[#05294F] focus:border-transparent transition-all"
                     placeholder="••••••••"
                     required
@@ -273,8 +289,10 @@ function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    tabIndex={-1}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-11 w-11 rounded-lg text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#05294F]/40 focus-visible:ring-offset-2 transition-colors inline-flex items-center justify-center"
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={showPassword}
+                    aria-controls="password"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
