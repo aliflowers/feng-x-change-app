@@ -247,12 +247,33 @@ export default function BeneficiariesPage() {
                     <p className="text-base font-semibold text-gray-600">{acc.document_number}</p>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Número de Cuenta</p>
-                    <p className="text-lg font-mono font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 select-all break-all">
-                      {acc.account_number}
-                    </p>
-                  </div>
+                  {acc.pago_movil_phone ? (
+                    /* Pago Móvil: mostrar teléfono y banco emisor */
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Teléfono</p>
+                        <p className="text-lg font-mono font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 select-all">
+                          {acc.pago_movil_phone}
+                        </p>
+                      </div>
+                      {acc.pago_movil_bank_code && (
+                        <div>
+                          <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Código Banco</p>
+                          <p className="text-base font-mono font-semibold text-gray-700 bg-gray-50 px-4 py-1.5 rounded-xl border border-gray-200 select-all">
+                            {acc.pago_movil_bank_code}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Cuenta bancaria normal */
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Número de Cuenta</p>
+                      <p className="text-lg font-mono font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 select-all break-all">
+                        {acc.account_number}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {acc.alias && (
@@ -274,7 +295,7 @@ export default function BeneficiariesPage() {
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Banco / Plataforma</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Titular</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Documento</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Número de Cuenta</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Cuenta / Teléfono</th>
                   <th className="text-center px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
@@ -310,9 +331,18 @@ export default function BeneficiariesPage() {
                       </td>
                       <td className="px-6 py-4 text-gray-700 font-medium">{acc.document_number}</td>
                       <td className="px-6 py-4">
-                        <code className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-lg text-gray-800 select-all">
-                          {acc.account_number}
-                        </code>
+                        {acc.pago_movil_phone ? (
+                          <div>
+                            <code className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-lg text-gray-800 select-all">
+                              {acc.pago_movil_phone}
+                            </code>
+                            <span className="text-xs text-gray-400 ml-2">PM</span>
+                          </div>
+                        ) : (
+                          <code className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-lg text-gray-800 select-all">
+                            {acc.account_number}
+                          </code>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">

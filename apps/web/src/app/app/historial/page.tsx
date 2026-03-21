@@ -56,7 +56,7 @@ interface TransactionWithDetails {
   user_bank_account?: {
     account_holder: string;
     account_number: string;
-    bank_platform?: { name: string };
+    bank?: { name: string };
   };
 }
 
@@ -152,10 +152,10 @@ export default function HistoryPage() {
           *,
           from_currency:currencies!transactions_from_currency_id_fkey(code, symbol, name),
           to_currency:currencies!transactions_to_currency_id_fkey(code, symbol, name),
-          user_bank_account:user_bank_accounts(
+          user_bank_account:user_bank_accounts!transactions_user_bank_account_id_fkey(
             account_holder,
             account_number,
-            bank_platform:banks_platforms(name)
+            bank:banks(name)
           )
         `)
         .eq('user_id', user.id)
@@ -359,7 +359,7 @@ export default function HistoryPage() {
                           {tx.user_bank_account?.account_holder || '-'}
                         </p>
                         <p className="text-xs text-gray-500 truncate max-w-[150px]">
-                          {tx.user_bank_account?.bank_platform?.name || '-'}
+                          {tx.user_bank_account?.bank?.name || '-'}
                         </p>
                       </td>
                       <td className="px-6 py-4">
@@ -636,7 +636,7 @@ export default function HistoryPage() {
                       <p className="font-bold text-gray-900">{selectedTransaction.user_bank_account?.account_holder || 'No especificado'}</p>
                       <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
                         <Building size={14} className="text-gray-400" />
-                        {selectedTransaction.user_bank_account?.bank_platform?.name || 'Banco no especificado'}
+                        {selectedTransaction.user_bank_account?.bank?.name || 'Banco no especificado'}
                       </div>
                       <p className="text-sm text-gray-500 font-mono mt-1">
                         {selectedTransaction.user_bank_account?.account_number || 'Sin número de cuenta'}

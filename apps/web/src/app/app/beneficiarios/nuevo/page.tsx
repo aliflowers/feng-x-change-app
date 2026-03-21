@@ -150,7 +150,8 @@ const documentTypeOptions = [
     country: 'VE', label: 'Venezuela', options: [
       { value: 'CI-V', label: 'Cédula de Identidad (V)' },
       { value: 'CI-E', label: 'Cédula de Identidad (E)' },
-      { value: 'RIF-V', label: 'RIF Personal (V)' },
+      { value: 'RIF-J', label: 'RIF (J) Jurídico' },
+      { value: 'RIF-G', label: 'RIF (G) Gubernamental' },
     ]
   },
   {
@@ -226,16 +227,10 @@ const DocumentTypeSelect = ({
   // Filtrar opciones según la moneda seleccionada
   const filteredOptions = currencyCode
     ? documentTypeOptions.map(group => {
-      // Para VES, personalizar las opciones
+      // Para VES, mostrar solo opciones venezolanas (sin WORLD)
       if (currencyCode === 'VES') {
-        if (group.country === 'VE') {
-          return {
-            ...group,
-            options: group.options.filter(opt => opt.value === 'CI-V' || opt.value === 'CI-E')
-          };
-        }
-        // Excluir WORLD si es VES
-        if (group.country === 'WORLD') return null;
+        if (group.country === 'VE') return group;
+        return null;
       }
 
       if (group.country === currencyToCountryMap[currencyCode] || group.country === 'WORLD') {
@@ -353,10 +348,12 @@ export default function NewBeneficiaryPage() {
     bank_id: '',
     account_number: '',
     account_holder: '',
-    document_type: '', // Tipo de documento
-    document_number: '', // Número de documento
+    document_type: '',
+    document_number: '',
     email: '',
     alias: '',
+    pago_movil_phone: '',
+    pago_movil_bank_code: '',
   });
 
   // Load Data
@@ -390,8 +387,8 @@ export default function NewBeneficiaryPage() {
 
     // Base Validation using Shared Schema
     const result = createUserBankAccountSchema.safeParse({
-      bank_platform_id: parseInt(formData.bank_id) || 1, // Temporary - schema still expects bank_platform_id
-      account_number: formData.account_number,
+      bank_platform_id: parseInt(formData.bank_id) || 1,
+      account_number: isPagoMovil ? 'PAGO_MOVIL' : formData.account_number,
       account_holder: formData.account_holder,
       document_number: formData.document_number,
       email: formData.email,
@@ -404,15 +401,28 @@ export default function NewBeneficiaryPage() {
       });
     }
 
+    // Para Pago Móvil: limpiar error de account_number del esquema base
+    // (la validación específica de PM se encarga abajo)
+    if (isPagoMovil) {
+      delete newErrors.account_number;
+    }
+
     // Specific Logic
     if (currentCurrencyCode === 'VES') {
-      const vesCheck = vesAccountSchema.safeParse(formData.account_number);
-      if (!vesCheck.success) newErrors.account_number = vesCheck.error.errors[0].message;
+      const selectedBankVes = banks.find(b => b.id.toString() === formData.bank_id);
+      const isPagoMovilSelected = selectedBankVes?.name === 'Pago Móvil';
 
-      // Validate bank code match
-      const selectedBank = banks.find(b => b.id.toString() === formData.bank_id);
-      if (selectedBank) {
-        // Logic to check if account starts with bank code could be added here if we had bank codes
+      if (isPagoMovilSelected) {
+        // Pago Móvil: validar teléfono (11 dígitos) y código de banco (4 dígitos)
+        if (!formData.pago_movil_bank_code || formData.pago_movil_bank_code.length !== 4) {
+          newErrors.account_number = 'Selecciona el banco emisor';
+        } else if (!formData.pago_movil_phone || formData.pago_movil_phone.length !== 11) {
+          newErrors.account_number = 'El número de teléfono debe tener 11 dígitos';
+        }
+      } else {
+        // Bancos normales VES: debe tener exactamente 20 dígitos
+        const vesCheck = vesAccountSchema.safeParse(formData.account_number);
+        if (!vesCheck.success) newErrors.account_number = vesCheck.error.errors[0].message;
       }
     }
 
@@ -439,19 +449,26 @@ export default function NewBeneficiaryPage() {
       if (!user) throw new Error('No Authenticated User');
 
       // Prepare payload
-      const payload = {
+      const payload: Record<string, unknown> = {
         user_id: user.id,
         bank_id: parseInt(formData.bank_id),
-        account_number: formData.account_number,
         account_holder: formData.account_holder,
         document_type: formData.document_type || null,
         document_number: formData.document_number,
-        // Auto-set account_type: WALLET para móviles/digitales, SAVINGS para bancos normales
         account_type: isPagoMovil || isDigitalWallet ? 'WALLET' : 'SAVINGS',
         email: formData.email || null,
         alias: formData.alias || null,
         is_active: true
       };
+
+      if (isPagoMovil) {
+        // Pago Móvil: guardar en columnas dedicadas
+        payload.account_number = 'PAGO_MOVIL';
+        payload.pago_movil_phone = formData.pago_movil_phone;
+        payload.pago_movil_bank_code = formData.pago_movil_bank_code;
+      } else {
+        payload.account_number = formData.account_number;
+      }
 
       const { error } = await supabase.from('user_bank_accounts').insert(payload);
       if (error) throw error;
@@ -486,8 +503,12 @@ export default function NewBeneficiaryPage() {
     }
 
     // Para document_number, solo permitir dígitos numéricos
+    // Para VES, limitar a 9 dígitos máximo
     if (name === 'document_number') {
       value = value.replace(/\D/g, '');
+      if (currentCurrencyCode === 'VES') {
+        value = value.slice(0, 9);
+      }
     }
 
     // Si cambia el banco, actualizar prefijo de cuenta para bancos VES
@@ -627,9 +648,9 @@ export default function NewBeneficiaryPage() {
                       <label className="text-sm font-medium text-gray-700">Banco (4 dígitos)</label>
                       <div className="relative">
                         <select
-                          name="account_number"
-                          value={formData.account_number.slice(0, 4)}
-                          onChange={(e) => setFormData(prev => ({ ...prev, account_number: e.target.value }))}
+                          name="pago_movil_bank_code"
+                          value={formData.pago_movil_bank_code || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, pago_movil_bank_code: e.target.value }))}
                           className="input appearance-none w-full pl-10"
                           required
                         >
@@ -647,12 +668,9 @@ export default function NewBeneficiaryPage() {
                       <div className="relative">
                         <input
                           type="tel"
-                          name="phone_for_pago_movil"
-                          value={formData.account_number.slice(4) || ''}
-                          onChange={(e) => {
-                            const bankCode = formData.account_number.slice(0, 4);
-                            setFormData(prev => ({ ...prev, account_number: bankCode + e.target.value.replace(/\D/g, '') }));
-                          }}
+                          name="pago_movil_phone"
+                          value={formData.pago_movil_phone || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, pago_movil_phone: e.target.value.replace(/\D/g, '').slice(0, 11) }))}
                           className="input pl-10 w-full font-mono"
                           placeholder="04141234567"
                           maxLength={11}
@@ -734,11 +752,13 @@ export default function NewBeneficiaryPage() {
                   <div className="relative">
                     <input
                       type="text"
+                      inputMode="numeric"
                       name="document_number"
                       value={formData.document_number}
                       onChange={handleChange}
+                      maxLength={currentCurrencyCode === 'VES' ? 9 : undefined}
                       className={`input pl-10 w-full ${errors.document_number ? 'border-red-500 focus:ring-red-200' : ''}`}
-                      placeholder={formData.document_type ? `Ej: 12345678` : 'Selecciona tipo primero'}
+                      placeholder={formData.document_type ? (currentCurrencyCode === 'VES' ? 'Ej: 12345678' : 'Ej: 12345678') : 'Selecciona tipo primero'}
                     />
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>

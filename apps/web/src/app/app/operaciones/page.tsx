@@ -54,6 +54,8 @@ interface UserBankAccount {
   document_number?: string;
   account_type?: string;
   email?: string;
+  pago_movil_phone?: string | null;
+  pago_movil_bank_code?: string | null;
   bank?: {
     name: string;
     currency_code: string;
@@ -348,6 +350,8 @@ export default function OperacionesPage() {
           document_number,
           account_type,
           email,
+          pago_movil_phone,
+          pago_movil_bank_code,
           bank:banks (
             name,
             currency_code
@@ -758,6 +762,8 @@ export default function OperacionesPage() {
           document_number,
           account_type,
           email,
+          pago_movil_phone,
+          pago_movil_bank_code,
           bank:banks (
             name,
             currency_code
@@ -1674,10 +1680,27 @@ export default function OperacionesPage() {
                           <span className="text-xs text-gray-500 block leading-tight mb-0.5">Banco / Plataforma</span>
                           <span className="text-sm font-medium text-gray-800">{account.bank_platform?.name || account.bank?.name}</span>
                         </div>
-                        <div className="flex-1">
-                          <span className="text-xs text-gray-500 block leading-tight mb-0.5">Cuenta / Identificador</span>
-                          <span className="text-sm font-mono text-gray-800 break-all">{account.account_number}</span>
-                        </div>
+                        {account.pago_movil_phone ? (
+                          /* Pago Móvil: Teléfono + Código Banco */
+                          <div className="flex-1 space-y-1">
+                            <div>
+                              <span className="text-xs text-gray-500 block leading-tight mb-0.5">Teléfono</span>
+                              <span className="text-sm font-mono text-gray-800">{account.pago_movil_phone}</span>
+                            </div>
+                            {account.pago_movil_bank_code && (
+                              <div>
+                                <span className="text-xs text-gray-500 block leading-tight mb-0.5">Código Banco</span>
+                                <span className="text-sm font-mono text-gray-800">{account.pago_movil_bank_code}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* Cuenta bancaria normal */
+                          <div className="flex-1">
+                            <span className="text-xs text-gray-500 block leading-tight mb-0.5">Cuenta / Identificador</span>
+                            <span className="text-sm font-mono text-gray-800 break-all">{account.account_number}</span>
+                          </div>
+                        )}
                       </div>
 
                       {(account.document_type || account.document_number) && (

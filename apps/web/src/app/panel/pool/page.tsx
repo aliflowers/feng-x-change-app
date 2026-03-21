@@ -44,8 +44,11 @@ interface PoolOperation {
     id: string;
     account_holder: string;
     account_number: string;
+    account_type: string | null;
     document_type: string | null;
     document_number: string | null;
+    pago_movil_phone: string | null;
+    pago_movil_bank_code: string | null;
     bank: { id: number; name: string } | null;
   } | null;
   taken_by_profile: { first_name: string; last_name: string } | null;
@@ -156,8 +159,11 @@ export default function PoolPage() {
             id,
             account_holder,
             account_number,
+            account_type,
             document_type,
             document_number,
+            pago_movil_phone,
+            pago_movil_bank_code,
             bank:banks(id, name)
           ),
           taken_by_profile:profiles!transactions_taken_by_fkey(first_name, last_name)
@@ -343,7 +349,7 @@ export default function PoolPage() {
     const allData = `Beneficiario: ${acc.account_holder}
 Documento: ${acc.document_type || ''}-${acc.document_number || 'N/A'}
 Banco: ${acc.bank?.name || 'N/A'}
-Número de cuenta: ${acc.account_number}
+${acc.pago_movil_phone ? `Teléfono: ${acc.pago_movil_phone}\nCódigo Banco: ${acc.pago_movil_bank_code || 'N/A'}` : `Número de cuenta: ${acc.account_number}`}
 Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_received.toLocaleString('es-VE', { minimumFractionDigits: 2 })} ${takenOperation.to_currency?.code}`;
     await copyToClipboard(allData, 'all');
   };
@@ -996,22 +1002,61 @@ Monto a pagar: ${takenOperation.to_currency?.symbol}${takenOperation.amount_rece
                   </button>
                 </div>
 
-                {/* Account Number */}
-                <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
-                  <div>
-                    <p className="text-xs text-slate-500">Número de Cuenta</p>
-                    <p className="font-mono font-bold text-slate-800">
-                      {takenOperation.user_bank_account?.account_number || 'N/A'}
-                    </p>
+                {/* Account Number or Pago Móvil */}
+                {takenOperation.user_bank_account?.pago_movil_phone ? (
+                  /* Pago Móvil: Teléfono + Código de Banco */
+                  <>
+                    <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
+                      <div>
+                        <p className="text-xs text-slate-500">Teléfono</p>
+                        <p className="font-mono font-bold text-slate-800">
+                          {takenOperation.user_bank_account.pago_movil_phone}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(takenOperation.user_bank_account?.pago_movil_phone || '', 'account')}
+                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                        title="Copiar"
+                      >
+                        {copiedField === 'account' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
+                      </button>
+                    </div>
+                    {takenOperation.user_bank_account.pago_movil_bank_code && (
+                      <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
+                        <div>
+                          <p className="text-xs text-slate-500">Código Banco Emisor</p>
+                          <p className="font-mono font-bold text-slate-800">
+                            {takenOperation.user_bank_account.pago_movil_bank_code}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(takenOperation.user_bank_account?.pago_movil_bank_code || '', 'bankcode')}
+                          className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                          title="Copiar"
+                        >
+                          {copiedField === 'bankcode' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Cuenta bancaria normal */
+                  <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div>
+                      <p className="text-xs text-slate-500">Número de Cuenta</p>
+                      <p className="font-mono font-bold text-slate-800">
+                        {takenOperation.user_bank_account?.account_number || 'N/A'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => copyToClipboard(takenOperation.user_bank_account?.account_number || '', 'account')}
+                      className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                      title="Copiar"
+                    >
+                      {copiedField === 'account' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => copyToClipboard(takenOperation.user_bank_account?.account_number || '', 'account')}
-                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                    title="Copiar"
-                  >
-                    {copiedField === 'account' ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} className="text-slate-500" />}
-                  </button>
-                </div>
+                )}
 
                 {/* Amount to Pay */}
                 <div className="flex items-center justify-between bg-emerald-50 rounded-xl p-3 border border-emerald-200">
